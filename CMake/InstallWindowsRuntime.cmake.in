@@ -30,6 +30,16 @@ if(NOT EXISTS "${_gem_install_bin}/MITK-GEM.exe")
   message(FATAL_ERROR "MITK-GEM.exe was not installed before runtime deployment.")
 endif()
 
+# The official Qt MSVC packages use Windows' system ICU implementation.  The
+# CMake bundle scanner can otherwise copy an unrelated ICU runtime found on a
+# developer machine's PATH; those DLLs use versioned symbols and prevent
+# Qt6Core.dll from loading.  Do not ship ambient ICU DLLs in the package.
+file(GLOB _gem_staged_icu_dlls "${_gem_install_bin}/icu*.dll")
+if(_gem_staged_icu_dlls)
+  message(STATUS "Removing non-Qt ICU runtime DLLs from the portable package")
+  file(REMOVE ${_gem_staged_icu_dlls})
+endif()
+
 # Scan the application and provisioned plug-ins so windeployqt includes every
 # Qt 6 module actually imported by the workbench.  MITK has already installed
 # the required Qt plug-in folders, so do not replace that curated layout.
