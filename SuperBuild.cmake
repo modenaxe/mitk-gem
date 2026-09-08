@@ -259,3 +259,15 @@ add_custom_target(${MY_PROJECT_NAME}
   COMMAND ${_build_cmd}
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${MY_PROJECT_NAME}-build
 )
+
+# Build the project first, then invoke only CPack's ZIP generator.  The ZIP is
+# a self-contained portable application and is written to the inner build's
+# packages directory (configured in CMake/CPackSetup.cmake).
+add_custom_target(${MY_PROJECT_NAME}-package
+  COMMAND ${CMAKE_CPACK_COMMAND}
+    --config ${CMAKE_CURRENT_BINARY_DIR}/${MY_PROJECT_NAME}-build/CPackConfig.cmake
+    --generator ZIP
+    -C ${CMAKE_CFG_INTDIR}
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${MY_PROJECT_NAME}-build
+  DEPENDS ${MY_PROJECT_NAME}-build
+)

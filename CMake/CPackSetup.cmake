@@ -11,6 +11,16 @@ set(CPACK_PACKAGE_VERSION "${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSIO
 set(CPACK_PACKAGE_EXECUTABLES "${MY_APP_NAME};${CPACK_PACKAGE_DESCRIPTION_SUMMARY}")
 set(CPACK_PACKAGE_NAME "${MY_APP_NAME}")
 set(CPACK_PACKAGE_FILE_NAME "MITK-GEM_${CPACK_PACKAGE_VERSION}-${CPACK_PACKAGE_ARCH}")
+# Keep generated archives out of the source tree and give local builds and CI
+# a stable location from which to publish the portable package.
+set(CPACK_PACKAGE_DIRECTORY "${PROJECT_BINARY_DIR}/packages")
+
+# MITK enables ZIP and NSIS by default on Windows.  MITK-GEM publishes a
+# portable archive, so keep CPack deterministic and avoid requiring NSIS on
+# a CI runner.
+set(MITK_GEM_CPACK_GENERATOR "ZIP" CACHE STRING
+    "CPack generator used for MITK-GEM release artifacts")
+set(CPACK_GENERATOR "${MITK_GEM_CPACK_GENERATOR}")
 
 # append revision number if available
 if(${PROJECT_NAME}_REVISION_ID)

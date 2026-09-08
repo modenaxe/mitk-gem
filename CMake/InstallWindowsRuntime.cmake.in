@@ -1,0 +1,59 @@
+# This file is configured by the top-level CMakeLists.txt and executed during
+# installation / CPack staging.  MITK's CPack rules install the application,
+# provisioning file, plug-ins, Qt plug-ins, and WebEngine resources.  CMake's
+# Windows dependency scanner cannot reliably discover the modern MITK runtime
+# closure outside a Visual Studio developer shell, so stage the known build
+# output directories explicitly and use windeployqt for Qt's DLL closure.
+
+set(_gem_install_bin "${CMAKE_INSTALL_PREFIX}/bin")
+set(_gem_configuration "${CMAKE_INSTALL_CONFIG_NAME}")
+
+function(_gem_install_dlls source_directory destination_directory)
+  if(EXISTS "${source_directory}")
+    file(GLOB _gem_runtime_dlls "${source_directory}/*.dll")
+    if(_gem_runtime_dlls)
+      file(INSTALL DESTINATION "${destination_directory}" TYPE FILE
+        FILES ${_gem_runtime_dlls})
+    endif()
+  endif()
+endfunction()
+
+# Project-native libraries, MITK, and the libraries built by MITK's
+# superbuild (ITK, VTK, GDCM, CTK, OpenSSL, and their transitive DLLs).
+_gem_install_dlls("@PROJECT_BINARY_DIR@/bin/${_gem_configuration}" "${_gem_install_bin}")
+_gem_install_dlls("@MITK_DIR@/bin/${_gem_configuration}" "${_gem_install_bin}")
+_gem_install_dlls("@MITK_DIR@/bin/plugins/${_gem_configuration}" "${_gem_install_bin}/plugins")
+_gem_install_dlls("@MITK_GEM_SUPERBUILD_ROOT@/ep/bin" "${_gem_install_bin}")
+_gem_install_dlls("@MITK_GEM_SUPERBUILD_ROOT@/ep/src/CTK-build/CTK-build/bin/${_gem_configuration}" "${_gem_install_bin}")
+
+if(NOT EXISTS "${_gem_install_bin}/MITK-GEM.exe")
+  message(FATAL_ERROR "MITK-GEM.exe was not installed before runtime deployment.")
+endif()
+
+# Scan the application and provisioned plug-ins so windeployqt includes every
+# Qt 6 module actually imported by the workbench.  MITK has already installed
+# the required Qt plug-in folders, so do not replace that curated layout.
+file(GLOB_RECURSE _gem_qt_entry_points
+  "${_gem_install_bin}/plugins/*.dll"
+  "${_gem_install_bin}/MitkCore/*.dll")
+
+set(_gem_qt_deploy_mode --release)
+if(_gem_configuration STREQUAL "Debug")
+  set(_gem_qt_deploy_mode --debug)
+endif()
+
+execute_process(
+  COMMAND "@MITK_GEM_WINDEPLOYQT_EXECUTABLE@"
+    ${_gem_qt_deploy_mode}
+    --no-plugins
+    --no-translations
+    --no-compiler-runtime
+    --dir "${_gem_install_bin}"
+    --plugindir "${_gem_install_bin}/plugins"
+    "${_gem_install_bin}/MITK-GEM.exe"
+    ${_gem_qt_entry_points}
+  RESULT_VARIABLE _gem_windeployqt_result)
+
+if(NOT _gem_windeployqt_result EQUAL 0)
+  message(FATAL_ERROR "windeployqt failed with exit code ${_gem_windeployqt_result}.")
+endif()

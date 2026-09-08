@@ -408,6 +408,26 @@ include(CPack)
 # Additional installation rules
 include(mitkInstallRules)
 
+# CPack's generic Windows dependency scanner cannot resolve all DLLs in a
+# modern MITK superbuild when packaging outside a Visual Studio developer
+# shell.  Add an explicit deployment pass after MITK has installed the app,
+# plug-ins, and Qt resources.
+if(WIN32)
+  get_filename_component(MITK_GEM_SUPERBUILD_ROOT "${MITK_DIR}" DIRECTORY)
+  get_filename_component(_mitk_gem_qt_bin "${QT_QMAKE_EXECUTABLE}" DIRECTORY)
+  find_program(MITK_GEM_WINDEPLOYQT_EXECUTABLE
+    NAMES windeployqt.exe
+    HINTS "${_mitk_gem_qt_bin}"
+    NO_DEFAULT_PATH
+    REQUIRED)
+
+  configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/CMake/InstallWindowsRuntime.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/InstallWindowsRuntime.cmake"
+    @ONLY)
+  install(SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/InstallWindowsRuntime.cmake")
+endif()
+
 #-----------------------------------------------------------------------------
 # Last configuration steps
 #-----------------------------------------------------------------------------
