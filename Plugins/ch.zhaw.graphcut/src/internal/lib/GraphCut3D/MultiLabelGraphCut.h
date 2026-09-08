@@ -1,7 +1,7 @@
 #ifndef __GraphCut_h__
 #define __GraphCut_h__
 
-#include "lib/gridcut/config.h"
+#include "gridcut-config.h"
 #ifdef GRIDCUT_LIBRARY_AVAILABLE
 #include "ImageMultiLabelGridCutFilter.h"
 #endif

@@ -29,7 +29,9 @@ namespace itk {
     ::FillGraph(const ImageContainer images, ProgressReporter &progress){
         typename InputImageType::SizeType dimensions;
         dimensions = this->GetInputImage()->GetLargestPossibleRegion().GetSize();
-        m_Graph = new GraphType(dimensions[0],dimensions[1],dimensions[2], this->GetNumberOfThreads(), 100);
+        delete m_Graph;
+        m_Graph = new GraphType(dimensions[0], dimensions[1], dimensions[2],
+                                static_cast<int>(this->GetNumberOfWorkUnits()), 100);
 
         // We are only using a 6-connected structure, so the kernel (iteration neighborhood) must only be 3x3x3
         // (specified by a radius of 1)

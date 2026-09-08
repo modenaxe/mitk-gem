@@ -121,6 +121,7 @@ jobs:
             "-DCGAL_DIR:PATH=$env:CGAL_DIR" `
             "-DMITK_OPENSSL_ROOT_DIR:PATH=$env:MITK_OPENSSL_ROOT_DIR" `
             '-DMITK-GEM_USE_SUPERBUILD:BOOL=ON' `
+            '-DMITK_GEM_ENABLE_GRIDCUT:BOOL=OFF' `
             '-DBUILD_TESTING:BOOL=OFF' `
             '-DMITK_BUILD_TESTING:BOOL=OFF' `
             '-DMITK_USE_Python3:BOOL=OFF'
@@ -135,6 +136,7 @@ jobs:
             -DCGAL_DIR:PATH="$CGAL_DIR" \
             -DMITK_OPENSSL_ROOT_DIR:PATH="$MITK_OPENSSL_ROOT_DIR" \
             -DMITK-GEM_USE_SUPERBUILD:BOOL=ON \
+            -DMITK_GEM_ENABLE_GRIDCUT:BOOL=OFF \
             -DBUILD_TESTING:BOOL=OFF \
             -DMITK_BUILD_TESTING:BOOL=OFF \
             -DMITK_USE_Python3:BOOL=OFF

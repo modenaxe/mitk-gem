@@ -11,7 +11,7 @@
 #define __ImageGridCutFilter_h_
 
 #include "ImageGraphCut3DFilter.h"
-#include "lib/gridcut/include/GridCut/GridGraph_3D_6C_MT.h"
+#include <GridCut/GridGraph_3D_6C_MT.h>
 
 namespace itk{
 

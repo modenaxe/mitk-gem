@@ -11,7 +11,7 @@
 #define __ImageMultiLabelGridCutFilter_h_
 
 #include "ImageMultiLabelGraphCut3DFilter.h"
-#include "lib/gridcut/examples/include/AlphaExpansion/AlphaExpansion_3D_6C_MT.h"
+#include <AlphaExpansion/AlphaExpansion_3D_6C_MT.h>
 #include <memory>
 #include <type_traits>
 #include <utility>
