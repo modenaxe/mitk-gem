@@ -73,7 +73,8 @@ void MesherCGAL::compute(void)
     surface->BuildCells();
     for (int i = 0; i < surface->GetNumberOfCells(); i++)
     {
-        vtkIdType npts, *pts;
+        vtkIdType npts;
+        const vtkIdType *pts;
         surface->GetCellPoints(i, npts, pts);
         off << npts;
         for (int j = 0; j < npts; j++)

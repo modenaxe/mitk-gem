@@ -18,7 +18,7 @@ See LICENSE.txt or http://www.mitk.org for details.
 
 #include <berryISelectionListener.h>
 
-#include <QmitkFunctionality.h>
+#include <QmitkAbstractView.h>
 #include <mitkUnstructuredGrid.h>
 #include <vtkFieldData.h>
 
@@ -32,7 +32,7 @@ namespace mitk {
     class PropertyObserver;
 }
 
-class UGVisualizationView : public QmitkFunctionality {
+class UGVisualizationView : public QmitkAbstractView {
     Q_OBJECT
 
 public:
@@ -41,7 +41,8 @@ public:
     UGVisualizationView();
     virtual ~UGVisualizationView();
 
-    virtual void CreateQtPartControl(QWidget *parent) override;
+    void CreateQtPartControl(QWidget *parent) override;
+    void SetFocus() override;
 
 protected slots:
     void UpdateRenderWindow();
@@ -50,7 +51,8 @@ protected slots:
     void FieldDataSelectionChanged(int);
 
 protected:
-    virtual void OnSelectionChanged(std::vector<mitk::DataNode *> nodes) override;
+    void OnSelectionChanged(berry::IWorkbenchPart::Pointer source,
+                            const QList<mitk::DataNode::Pointer>& nodes) override;
     void CreateConnections();
 
 private:
@@ -64,8 +66,6 @@ private:
     bool IsRenderable(mitk::DataNode::Pointer);
 
     Ui::QmitkUGVisualizationViewControls m_Controls;
-    QmitkStdMultiWidget *m_MultiWidget;
-
     int m_FirstVolumeRepId;
     QHash<int, int> m_MapRepComboToEnumId;
     bool m_VolumeMode;

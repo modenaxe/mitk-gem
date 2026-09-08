@@ -29,7 +29,7 @@ void GraphcutWorker::preparePipeline() {
     m_graphCut->SetBackgroundImage(rescaleMask(m_background, m_ForegroundPixelValue));
     m_graphCut->SetForegroundPixelValue(m_ForegroundPixelValue);
     const uint32_t uiNumberOfThreads = std::thread::hardware_concurrency();
-    m_graphCut->SetNumberOfThreads(uiNumberOfThreads > 0 ? uiNumberOfThreads : 1);
+    m_graphCut->SetNumberOfWorkUnits(uiNumberOfThreads > 0 ? uiNumberOfThreads : 1);
 
     m_graphCut->SetSigma(m_Sigma);
     switch (m_boundaryDirection) {

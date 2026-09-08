@@ -1,10 +1,9 @@
 #pragma once
 
 #include <GemMesherExports.h>
+#include <vtkPolyData.h>
 #include <vtkSmartPointer.h>
-
-class vtkPolyData;
-class vtkUnstructuredGrid;
+#include <vtkUnstructuredGrid.h>
 
 namespace gem
 {

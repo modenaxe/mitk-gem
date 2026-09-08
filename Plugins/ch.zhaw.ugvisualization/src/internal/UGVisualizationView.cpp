@@ -20,7 +20,6 @@ See LICENSE.txt or http://www.mitk.org for details.
 
 // Qmitk
 #include "UGVisualizationView.h"
-#include "QmitkStdMultiWidget.h"
 
 #include <mitkGridRepresentationProperty.h>
 #include <mitkGridVolumeMapperProperty.h>
@@ -67,9 +66,7 @@ protected:
 const std::string UGVisualizationView::VIEW_ID = "ch.zhaw.ugvisualization";
 
 UGVisualizationView::UGVisualizationView()
-          : QmitkFunctionality()
-          , m_MultiWidget(0)
-          , m_FirstVolumeRepId(-1)
+          : m_FirstVolumeRepId(-1)
           , m_VolumeModeObserver(0)
 {
 }
@@ -93,6 +90,9 @@ void UGVisualizationView::CreateQtPartControl(QWidget *parent) {
     this->UpdateGUI();
 
     CreateConnections();
+}
+
+void UGVisualizationView::SetFocus() {
 }
 
 void UGVisualizationView::CreateConnections() {
@@ -180,7 +180,8 @@ void UGVisualizationView::SelectUG(mitk::UnstructuredGrid::Pointer _ugrid, mitk:
     }
 }
 
-void UGVisualizationView::OnSelectionChanged(std::vector<mitk::DataNode*>) {
+void UGVisualizationView::OnSelectionChanged(berry::IWorkbenchPart::Pointer,
+                                              const QList<mitk::DataNode::Pointer>&) {
     UpdateGUI();
 }
 

@@ -62,7 +62,7 @@ SliceNavigationController *WorkbenchUtils::getSliceNavigationControllerByAxis(Ax
 
 unsigned int WorkbenchUtils::getCurrentIndexByAxis(Axis axis) {
     SliceNavigationController *snc = WorkbenchUtils::getSliceNavigationControllerByAxis(axis);
-    return snc->GetSlice()->GetPos();
+    return snc->GetStepper()->GetPos();
 }
 
 Image *WorkbenchUtils::getImageByDataIndex(QList <DataNode::Pointer> nodes, int index) {

@@ -9,7 +9,7 @@
 #include <QtConcurrentRun>
 #include <QWidget>
 #include <mitkImage.h>
-#include <tinyxml.h>
+#include <tinyxml2.h>
 
 #include <vtkImageCast.h>
 #include <vtkCellArray.h>
@@ -23,7 +23,9 @@
 #include "PowerLawWidget.h"
 
 const std::string MaterialMappingView::VIEW_ID = "org.mitk.views.materialmapping";
+#ifdef MITK_GEM_ENABLE_GUI_TESTS
 Ui::MaterialMappingViewControls *MaterialMappingView::controls = nullptr;
+#endif
 
 MaterialMappingView::~MaterialMappingView() {
     if(m_WorkerFuture.isRunning()){
@@ -56,8 +58,9 @@ void MaterialMappingView::CreateQtPartControl(QWidget *parent) {
     m_Controls.greyscaleImageComboBox->SetAutoSelectNewItems(false);
     m_Controls.greyscaleImageComboBox->SetPredicate(WorkbenchUtils::createIsImageTypePredicate());
 
-    // testing
-    if (TESTING) {
+    // Optional GUI test controls are only compiled in testing builds.
+#ifdef MITK_GEM_ENABLE_GUI_TESTS
+    {
         controls = &m_Controls;
         m_Controls.testingGroup->show();
         m_Controls.expectedResultComboBox->SetDataStorage(this->GetDataStorage());
@@ -71,9 +74,10 @@ void MaterialMappingView::CreateQtPartControl(QWidget *parent) {
         connect(m_Controls.runUnitTestsButton, SIGNAL(clicked()), m_TestRunner.get(), SLOT(runUnitTests()));
         connect(m_Controls.compareGridsButton, SIGNAL(clicked()), this, SLOT(compareGrids()));
         connect(m_Controls.createEMorganButton, SIGNAL(clicked()), this, SLOT(createEMorganImage()));
-    } else {
-        m_Controls.testingGroup->hide();
     }
+#else
+    m_Controls.testingGroup->hide();
+#endif
 
     // hide custom erosion parameter
     m_Controls.uParamCheckBox->hide();
@@ -218,6 +222,7 @@ void MaterialMappingView::unitSelectionChanged(int) {
     tableDataChanged();
 }
 
+#ifdef MITK_GEM_ENABLE_GUI_TESTS
 void MaterialMappingView::compareGrids() {
     mitk::DataNode *expectedResultNode0 = m_Controls.expectedResultComboBox->GetSelectedNode();
     mitk::DataNode *expectedResultNode1 = m_Controls.expectedResultComboBox_2->GetSelectedNode();
@@ -225,6 +230,7 @@ void MaterialMappingView::compareGrids() {
     mitk::UnstructuredGrid::Pointer u1 = dynamic_cast<mitk::UnstructuredGrid *>(expectedResultNode1->GetData());
     m_TestRunner->compareGrids(u0, u1);
 }
+#endif
 
 void MaterialMappingView::createEMorganImage() {
     mitk::DataNode *imageNode = m_Controls.greyscaleImageComboBox->GetSelectedNode();
@@ -267,21 +273,23 @@ void MaterialMappingView::saveParametersButtonClicked() {
     if (!filename.isNull()) {
         MITK_INFO << "saving parameters to file: " << filename.toUtf8().constData();
 
-        TiXmlDocument doc;
-        auto root = new TiXmlElement("MaterialMapping");
-        root->SetAttribute("Version", WorkbenchUtils::getGemVersion());
-        auto calibration = m_CalibrationDataModel.serializeToXml();
-        auto bonedensity = gui::serializeDensityGroupStateToXml(m_Controls);
-        auto powerlaws = m_PowerLawWidgetManager->serializeToXml();
-        auto options = gui::serializeOptionsGroupStateToXml(m_Controls);
-        root->LinkEndChild(calibration);
-        root->LinkEndChild(bonedensity);
-        root->LinkEndChild(powerlaws);
-        root->LinkEndChild(options);
+        tinyxml2::XMLDocument doc;
+        auto root = doc.NewElement("MaterialMapping");
+        root->SetAttribute("Version", WorkbenchUtils::getGemVersion().c_str());
+        auto calibration = m_CalibrationDataModel.serializeToXml(doc);
+        auto bonedensity = gui::serializeDensityGroupStateToXml(m_Controls, doc);
+        auto powerlaws = m_PowerLawWidgetManager->serializeToXml(doc);
+        auto options = gui::serializeOptionsGroupStateToXml(m_Controls, doc);
+        root->InsertEndChild(calibration);
+        root->InsertEndChild(bonedensity);
+        root->InsertEndChild(powerlaws);
+        root->InsertEndChild(options);
 
-        doc.LinkEndChild(new TiXmlDeclaration("1.0", "utf-8", ""));
-        doc.LinkEndChild(root);
-        doc.SaveFile(filename.toUtf8().constData());
+        doc.InsertEndChild(doc.NewDeclaration("xml version=\"1.0\" encoding=\"utf-8\""));
+        doc.InsertEndChild(root);
+        if (doc.SaveFile(filename.toUtf8().constData()) != tinyxml2::XML_SUCCESS) {
+            QMessageBox::warning(0, "", "could not save parameter file.");
+        }
     } else {
         MITK_INFO << "canceled file save dialog.";
     }
@@ -292,13 +300,16 @@ void MaterialMappingView::loadParametersButtonClicked() {
     if (!filename.isNull()) {
         MITK_INFO << "loading parameters from file: " << filename.toUtf8().constData();
 
-        TiXmlDocument doc(filename.toUtf8().constData());
-        TiXmlHandle hDoc(&doc);
-        if (!doc.LoadFile()) {
+        tinyxml2::XMLDocument doc;
+        if (doc.LoadFile(filename.toUtf8().constData()) != tinyxml2::XML_SUCCESS) {
             QMessageBox::warning(0, "", "could not read from file.");
             return;
-        };
-        auto root = hDoc.FirstChildElement().Element();
+        }
+        auto root = doc.RootElement();
+        if (root == nullptr) {
+            QMessageBox::warning(0, "", "could not read parameter file contents.");
+            return;
+        }
         auto calibration = root->FirstChildElement("Calibration");
         if (calibration) {
             MITK_INFO << "loading calibration...";

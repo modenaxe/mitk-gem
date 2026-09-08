@@ -19,7 +19,7 @@ See LICENSE.txt or http://www.mitk.org for details.
 #include "perspectives/GemPerspective.h"
 
 #include <mitkVersion.h>
-#include <mitkLogMacros.h>
+#include <mitkLog.h>
 
 #include <service/cm/ctkConfigurationAdmin.h>
 #include <service/cm/ctkConfiguration.h>

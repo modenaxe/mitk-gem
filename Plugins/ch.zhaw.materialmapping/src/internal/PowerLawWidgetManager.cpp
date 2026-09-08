@@ -82,24 +82,24 @@ size_t PowerLawWidgetManager::getNumberOfWidgets() {
     return m_Widgets.size();
 }
 
-TiXmlElement *PowerLawWidgetManager::serializeToXml() {
-    auto root = new TiXmlElement("PowerLaws");
+tinyxml2::XMLElement *PowerLawWidgetManager::serializeToXml(tinyxml2::XMLDocument &document) {
+    auto root = document.NewElement("PowerLaws");
 
     for (auto &widget : m_Widgets) {
         auto params = widget->getPowerLawParameters();
-        auto law = new TiXmlElement("PowerLawParameters");
-        law->SetDoubleAttribute("factor", params.factor);
-        law->SetDoubleAttribute("exponent", params.exponent);
-        law->SetDoubleAttribute("offset", params.offset);
-        law->SetDoubleAttribute("rangeMin", widget->getMin());
-        law->SetDoubleAttribute("rangeMax", widget->getMax());
-        root->LinkEndChild(law);
+        auto law = document.NewElement("PowerLawParameters");
+        law->SetAttribute("factor", params.factor);
+        law->SetAttribute("exponent", params.exponent);
+        law->SetAttribute("offset", params.offset);
+        law->SetAttribute("rangeMin", widget->getMin());
+        law->SetAttribute("rangeMax", widget->getMax());
+        root->InsertEndChild(law);
     }
 
     return root;
 }
 
-void PowerLawWidgetManager::loadFromXml(TiXmlElement *_root) {
+void PowerLawWidgetManager::loadFromXml(tinyxml2::XMLElement *_root) {
     std::vector < PowerLawWidget * > widgets;
 
     double valFactor, valExponent, valOffset, valMin, valMax;
@@ -110,8 +110,8 @@ void PowerLawWidgetManager::loadFromXml(TiXmlElement *_root) {
         auto r3 = child->QueryDoubleAttribute("rangeMin", &valMin);
         auto r4 = child->QueryDoubleAttribute("rangeMax", &valMax);
 
-        if (r0 == TIXML_SUCCESS && r1 == TIXML_SUCCESS && r2 == TIXML_SUCCESS && r3 == TIXML_SUCCESS &&
-            r4 == TIXML_SUCCESS) {
+        if (r0 == tinyxml2::XML_SUCCESS && r1 == tinyxml2::XML_SUCCESS && r2 == tinyxml2::XML_SUCCESS && r3 == tinyxml2::XML_SUCCESS &&
+            r4 == tinyxml2::XML_SUCCESS) {
             auto w = new PowerLawWidget();
             w->setFactor(valFactor);
             w->setExponent(valExponent);

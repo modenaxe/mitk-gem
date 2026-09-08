@@ -24,7 +24,8 @@ namespace gem
         quad->Allocate(tetra->GetNumberOfCells());
         for (int i = 0; i < tetra->GetNumberOfCells(); i++)
         {
-            vtkIdType ntetpts, *tetpts, quadpts[10];
+            vtkIdType ntetpts, quadpts[10];
+            const vtkIdType *tetpts;
             tetra->GetCellPoints(i, ntetpts, tetpts);
             for (int j = 0; j < ntetpts; j++)
             {

@@ -65,7 +65,6 @@ PowerLawWidget::PowerLawWidget() {
 
     auto formulaLayout = new QHBoxLayout;
     formulaLayout->setContentsMargins(0, 0, 0, 0);
-    formulaLayout->setMargin(0);
     formulaLayout->setSpacing(0);
     formulaLayout->addWidget(new QLabel(tr("E=")));
     formulaLayout->addWidget(m_Factor);
@@ -83,7 +82,6 @@ PowerLawWidget::PowerLawWidget() {
 
     auto mainLayout = new QHBoxLayout;
     mainLayout->setContentsMargins(0, 0, 0, 0);
-    mainLayout->setMargin(0);
     mainLayout->setSpacing(0);
     mainLayout->addWidget(formulaWidget);
     setLayout(mainLayout);

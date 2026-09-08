@@ -1,7 +1,7 @@
 #pragma once
 
 #include <QWidget>
-#include <tinyxml.h>
+#include <tinyxml2.h>
 
 #include "ui_MaterialMappingViewControls.h"
 
@@ -42,10 +42,10 @@ namespace gui {
     MaterialMappingFilter::Method getSelectedMappingMethod(Ui::MaterialMappingViewControls &_controls);
 
     // XML (de-)serialization
-    TiXmlElement* serializeDensityGroupStateToXml(Ui::MaterialMappingViewControls &_controls);
-    void loadDensityGroupStateFromXml(Ui::MaterialMappingViewControls &_controls, TiXmlElement *);
-    TiXmlElement* serializeOptionsGroupStateToXml(Ui::MaterialMappingViewControls &_controls);
-    void loadOptionsGroupStateFromXml(Ui::MaterialMappingViewControls &_controls, TiXmlElement *);
+    tinyxml2::XMLElement* serializeDensityGroupStateToXml(Ui::MaterialMappingViewControls &_controls, tinyxml2::XMLDocument&);
+    void loadDensityGroupStateFromXml(Ui::MaterialMappingViewControls &_controls, tinyxml2::XMLElement *);
+    tinyxml2::XMLElement* serializeOptionsGroupStateToXml(Ui::MaterialMappingViewControls &_controls, tinyxml2::XMLDocument&);
+    void loadOptionsGroupStateFromXml(Ui::MaterialMappingViewControls &_controls, tinyxml2::XMLElement *);
 
     /**
      * Convenience functions to highlight QWidgets with predefined background-colors

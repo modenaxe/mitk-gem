@@ -3,7 +3,7 @@
 #include <QWidget>
 #include <QLayout>
 
-#include <tinyxml.h>
+#include <tinyxml2.h>
 
 #include "PowerLawWidget.h"
 #include "PowerLawFunctor.h"
@@ -37,8 +37,8 @@ public:
     PowerLawFunctor createFunctor();
 
     // XML I/O
-    TiXmlElement *serializeToXml();
-    void loadFromXml(TiXmlElement *);
+    tinyxml2::XMLElement *serializeToXml(tinyxml2::XMLDocument&);
+    void loadFromXml(tinyxml2::XMLElement *);
 
 public slots:
     /**

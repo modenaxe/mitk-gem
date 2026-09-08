@@ -54,47 +54,47 @@ void gui::setErrorQSSField(QWidget *widget, bool bEnabled) {
     setNamedQSSField(widget, "errorField", bEnabled);
 }
 
-TiXmlElement *gui::serializeDensityGroupStateToXml(Ui::MaterialMappingViewControls &_controls) {
-    auto root = new TiXmlElement("BoneDensityParameters");
+tinyxml2::XMLElement *gui::serializeDensityGroupStateToXml(Ui::MaterialMappingViewControls &_controls, tinyxml2::XMLDocument &document) {
+    auto root = document.NewElement("BoneDensityParameters");
 
-    auto rhoCt = new TiXmlElement("RhoCT");
+    auto rhoCt = document.NewElement("RhoCT");
     rhoCt->SetAttribute("AutomaticFit", _controls.automaticFitCheckBox->isChecked());
-    rhoCt->SetDoubleAttribute("slope", _controls.linEQSlopeSpinBox->value());
-    rhoCt->SetDoubleAttribute("offset", _controls.linEQOffsetSpinBox->value());
+    rhoCt->SetAttribute("slope", _controls.linEQSlopeSpinBox->value());
+    rhoCt->SetAttribute("offset", _controls.linEQOffsetSpinBox->value());
 
-    auto rhoAsh = new TiXmlElement("RhoAsh");
+    auto rhoAsh = document.NewElement("RhoAsh");
     rhoAsh->SetAttribute("enabled", _controls.rhoAshCheckBox->isChecked());
-    rhoAsh->SetDoubleAttribute("offset", _controls.rhoAshOffsetSpinBox->value());
-    rhoAsh->SetDoubleAttribute("divisor", _controls.rhoAshDivisorSpinBox->value());
+    rhoAsh->SetAttribute("offset", _controls.rhoAshOffsetSpinBox->value());
+    rhoAsh->SetAttribute("divisor", _controls.rhoAshDivisorSpinBox->value());
 
-    auto rhoApp = new TiXmlElement("RhoApp");
+    auto rhoApp = document.NewElement("RhoApp");
     rhoApp->SetAttribute("enabled", _controls.rhoAppCheckBox->isChecked());
-    rhoApp->SetDoubleAttribute("divisor", _controls.rhoAppDivisorSpinBox->value());
+    rhoApp->SetAttribute("divisor", _controls.rhoAppDivisorSpinBox->value());
 
-    root->LinkEndChild(rhoCt);
-    root->LinkEndChild(rhoAsh);
-    root->LinkEndChild(rhoApp);
+    root->InsertEndChild(rhoCt);
+    root->InsertEndChild(rhoAsh);
+    root->InsertEndChild(rhoApp);
 
     return root;
 }
 
-void gui::loadDensityGroupStateFromXml(Ui::MaterialMappingViewControls &_controls, TiXmlElement *_root) {
+void gui::loadDensityGroupStateFromXml(Ui::MaterialMappingViewControls &_controls, tinyxml2::XMLElement *_root) {
     bool b;
     double d;
     int ret;
 
     auto rhoCt = _root->FirstChildElement("RhoCT");
     ret = rhoCt->QueryBoolAttribute("AutomaticFit", &b);
-    if (ret == TIXML_SUCCESS) {
+    if (ret == tinyxml2::XML_SUCCESS) {
         _controls.automaticFitCheckBox->setChecked(b);
 
         if(!b){
             ret = rhoCt->QueryDoubleAttribute("slope", &d);
-            if (ret == TIXML_SUCCESS) {
+            if (ret == tinyxml2::XML_SUCCESS) {
                 _controls.linEQSlopeSpinBox->setValue(d);
             }
             ret = rhoCt->QueryDoubleAttribute("offset", &d);
-            if (ret == TIXML_SUCCESS) {
+            if (ret == tinyxml2::XML_SUCCESS) {
                 _controls.linEQOffsetSpinBox->setValue(d);
             }
         }
@@ -102,31 +102,31 @@ void gui::loadDensityGroupStateFromXml(Ui::MaterialMappingViewControls &_control
 
     auto rhoAsh = _root->FirstChildElement("RhoAsh");
     ret = rhoAsh->QueryBoolAttribute("enabled", &b);
-    if (ret == TIXML_SUCCESS) {
+    if (ret == tinyxml2::XML_SUCCESS) {
         _controls.rhoAshCheckBox->setChecked(b);
     }
     ret = rhoAsh->QueryDoubleAttribute("offset", &d);
-    if (ret == TIXML_SUCCESS) {
+    if (ret == tinyxml2::XML_SUCCESS) {
         _controls.rhoAshOffsetSpinBox->setValue(d);
     }
     ret = rhoAsh->QueryDoubleAttribute("divisor", &d);
-    if (ret == TIXML_SUCCESS) {
+    if (ret == tinyxml2::XML_SUCCESS) {
         _controls.rhoAshDivisorSpinBox->setValue(d);
     }
 
     auto rhoApp = _root->FirstChildElement("RhoApp");
     ret = rhoApp->QueryBoolAttribute("enabled", &b);
-    if (ret == TIXML_SUCCESS) {
+    if (ret == tinyxml2::XML_SUCCESS) {
         _controls.rhoAppCheckBox->setChecked(b);
     }
     ret = rhoApp->QueryDoubleAttribute("divisor", &d);
-    if (ret == TIXML_SUCCESS) {
+    if (ret == tinyxml2::XML_SUCCESS) {
         _controls.rhoAppDivisorSpinBox->setValue(d);
     }
 }
 
-TiXmlElement *gui::serializeOptionsGroupStateToXml(Ui::MaterialMappingViewControls &_controls) {
-    auto root = new TiXmlElement("Options");
+tinyxml2::XMLElement *gui::serializeOptionsGroupStateToXml(Ui::MaterialMappingViewControls &_controls, tinyxml2::XMLDocument &document) {
+    auto root = document.NewElement("Options");
     root->SetAttribute("doPeel", _controls.uParamCheckBox->isChecked());
     root->SetAttribute("numberOfExtends", _controls.eParamSpinBox->value());
     root->SetAttribute("minValue", _controls.fParamSpinBox->value());
@@ -134,23 +134,23 @@ TiXmlElement *gui::serializeOptionsGroupStateToXml(Ui::MaterialMappingViewContro
     return root;
 }
 
-void gui::loadOptionsGroupStateFromXml(Ui::MaterialMappingViewControls &_controls, TiXmlElement *_root) {
+void gui::loadOptionsGroupStateFromXml(Ui::MaterialMappingViewControls &_controls, tinyxml2::XMLElement *_root) {
     bool b;
     int i;
     double d;
 
     auto ret = _root->QueryBoolAttribute("doPeel", &b);
-    if (ret == TIXML_SUCCESS) {
+    if (ret == tinyxml2::XML_SUCCESS) {
         _controls.uParamCheckBox->setChecked(b);
     }
 
     ret = _root->QueryIntAttribute("numberOfExtends", &i);
-    if (ret == TIXML_SUCCESS) {
+    if (ret == tinyxml2::XML_SUCCESS) {
         _controls.eParamSpinBox->setValue(i);
     }
 
     ret = _root->QueryDoubleAttribute("minValue", &d);
-    if (ret == TIXML_SUCCESS) {
+    if (ret == tinyxml2::XML_SUCCESS) {
         _controls.fParamSpinBox->setValue(d);
     }
 }

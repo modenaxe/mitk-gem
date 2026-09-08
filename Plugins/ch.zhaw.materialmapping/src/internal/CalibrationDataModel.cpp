@@ -140,36 +140,37 @@ std::string CalibrationDataModel::getUnitString() const {
         case Unit::gHA_cm3:
             return "gHA/cm³";
     }
+    return {};
 }
 
-TiXmlElement *CalibrationDataModel::serializeToXml() const {
-    auto root = new TiXmlElement("Calibration");
-    root->SetAttribute("unit", getUnitString());
+tinyxml2::XMLElement *CalibrationDataModel::serializeToXml(tinyxml2::XMLDocument &document) const {
+    auto root = document.NewElement("Calibration");
+    root->SetAttribute("unit", getUnitString().c_str());
 
     for (auto &pair : m_Data) {
-        auto entry = new TiXmlElement("DataPoint");
-        entry->SetDoubleAttribute("HU", pair.first);
-        entry->SetDoubleAttribute("rho", pair.second);
-        root->LinkEndChild(entry);
+        auto entry = document.NewElement("DataPoint");
+        entry->SetAttribute("HU", pair.first);
+        entry->SetAttribute("rho", pair.second);
+        root->InsertEndChild(entry);
     }
 
     return root;
 }
 
-void CalibrationDataModel::loadFromXml(TiXmlElement *_root) {
-    std::string unit;
-    auto r = _root->QueryStringAttribute("unit", &unit);
-    if (r != TIXML_SUCCESS) {
+void CalibrationDataModel::loadFromXml(tinyxml2::XMLElement *_root) {
+    const auto* unit = _root->Attribute("unit");
+    if (unit == nullptr) {
         QMessageBox::warning(0, "invalid file", "Invalid file format: Could not read calibration unit.");
+        return;
     }
-    setUnit(QString::fromUtf8(unit.c_str()));
+    setUnit(QString::fromUtf8(unit));
 
     std::vector <std::pair<double, double>> measurements;
     double valHu, valRho;
     for (auto child = _root->FirstChildElement("DataPoint"); child; child = child->NextSiblingElement()) {
         auto r0 = child->QueryDoubleAttribute("HU", &valHu);
         auto r1 = child->QueryDoubleAttribute("rho", &valRho);
-        if (r0 == TIXML_SUCCESS && r1 == TIXML_SUCCESS) {
+        if (r0 == tinyxml2::XML_SUCCESS && r1 == tinyxml2::XML_SUCCESS) {
             measurements.push_back(std::make_pair(valHu, valRho));
         } else {
             QMessageBox::warning(0, "failed to load file", "invalid file format.");

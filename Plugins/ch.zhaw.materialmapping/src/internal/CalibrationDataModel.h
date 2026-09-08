@@ -4,7 +4,7 @@
 #include <QStandardItemModel>
 #include <QString>
 
-#include <tinyxml.h>
+#include <tinyxml2.h>
 
 #include "BoneDensityParameters.h"
 
@@ -53,12 +53,12 @@ public:
     /**
      * Serializes current GUI state to XML
      */
-    TiXmlElement* serializeToXml() const;
+    tinyxml2::XMLElement* serializeToXml(tinyxml2::XMLDocument&) const;
 
     /**
      * Load GUI state from XML
      */
-    void loadFromXml(TiXmlElement *);
+    void loadFromXml(tinyxml2::XMLElement *);
 
 signals:
     /**
