@@ -15,12 +15,17 @@ set(INTERNAL_CPP_FILES
   PowerLawParameters.cpp
   PowerLawWidget.cpp
   PowerLawWidgetManager.cpp
-  test/BoneDensityTest.cpp
-  test/GridComparator.cpp
-  test/PowerLawFunctorTest.cpp
-  test/PowerLawWidgetTest.cpp
-  test/Runner.cpp
 )
+
+if(BUILD_TESTING)
+  list(APPEND INTERNAL_CPP_FILES
+    test/BoneDensityTest.cpp
+    test/GridComparator.cpp
+    test/PowerLawFunctorTest.cpp
+    test/PowerLawWidgetTest.cpp
+    test/Runner.cpp
+  )
+endif()
 
 set(UI_FILES
   src/internal/MaterialMappingViewControls.ui
@@ -32,8 +37,11 @@ set(MOC_H_FILES
   src/internal/MaterialMappingView.h
   src/internal/PowerLawWidget.h
   src/internal/PowerLawWidgetManager.h
-  src/internal/test/Runner.h
 )
+
+if(BUILD_TESTING)
+  list(APPEND MOC_H_FILES src/internal/test/Runner.h)
+endif()
 
 # list of resource files which can be used by the plug-in
 # system without loading the plug-ins shared library,

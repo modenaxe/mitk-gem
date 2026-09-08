@@ -15,33 +15,29 @@ if(NOT MITK_DIR)
   option(MITK_USE_SUPERBUILD "Use superbuild for MITK" ON)
   option(MITK_USE_BLUEBERRY "Build the BlueBerry platform in MITK" ON)
   option(MITK_BUILD_EXAMPLES "Build the MITK examples" OFF)
-  option(MITK_BUILD_ALL_PLUGINS "Build all MITK plugins" ON)
+  option(MITK_BUILD_ALL_PLUGINS "Build all MITK plugins" OFF)
   option(MITK_BUILD_TESTING "Build the MITK unit tests" OFF)
-    option(MITK_USE_ACVD "Use Approximated Centroidal Vornoi Diagrams" ON)
+  set(MITK_BUILD_CONFIGURATION "Custom" CACHE STRING "MITK build configuration")
+  option(MITK_USE_ACVD "Use Approximated Centroidal Voronoi Diagrams" ON)
   option(MITK_USE_CTK "Use CTK in MITK" ${MITK_USE_BLUEBERRY})
   option(MITK_USE_DCMTK "Use DCMTK in MITK" ON)
-  option(MITK_USE_QT "Use Nokia's Qt library in MITK" ON)
-  option(MITK_USE_OpenCV "Use Intel's OpenCV library" OFF)
-  option(MITK_USE_Python "Enable Python wrapping in MITK" OFF)
+  option(MITK_USE_Qt6 "Use Qt 6 in MITK" ON)
+  option(MITK_USE_Python3 "Enable Python 3 support in MITK" OFF)
 
   if(MITK_USE_BLUEBERRY AND NOT MITK_USE_CTK)
     message("Forcing MITK_USE_CTK to ON because of MITK_USE_BLUEBERRY")
     set(MITK_USE_CTK ON CACHE BOOL "Use CTK in MITK" FORCE)
   endif()
 
-  if(MITK_USE_CTK AND NOT MITK_USE_QT)
-    message("Forcing MITK_USE_QT to ON because of MITK_USE_CTK")
-    set(MITK_USE_QT ON CACHE BOOL "Use Nokia's Qt library in MITK" FORCE)
+  if(MITK_USE_CTK AND NOT MITK_USE_Qt6)
+    message("Forcing MITK_USE_Qt6 to ON because of MITK_USE_CTK")
+    set(MITK_USE_Qt6 ON CACHE BOOL "Use Qt 6 in MITK" FORCE)
   endif()
-
-  set(MITK_USE_CableSwig ${MITK_USE_Python})
-  set(MITK_USE_GDCM 1)
-  set(MITK_USE_ITK 1)
-  set(MITK_USE_VTK 1)
 
   mark_as_advanced(MITK_USE_SUPERBUILD
                    MITK_BUILD_ALL_PLUGINS
                    MITK_BUILD_TESTING
+                   MITK_BUILD_CONFIGURATION
                    )
 
   set(mitk_cmake_boolean_args
@@ -52,28 +48,34 @@ if(NOT MITK_DIR)
     MITK_USE_ACVD
     MITK_USE_CTK
     MITK_USE_DCMTK
-    MITK_USE_QT
-    MITK_USE_OpenCV
-    MITK_USE_Python
+    MITK_USE_Qt6
+    MITK_USE_Python3
    )
 
-  if(MITK_USE_QT)
-    # Look for Qt at the superbuild level, to catch missing Qt libs early
-	  find_package(Qt5 5.0.0 COMPONENTS
-		  Concurrent
-          LinguistTools
-		  OpenGL
-		  PrintSupport
-		  Script
-		  Sql
-		  Svg
-          Widgets
-		  WebEngine
-		  Xml
-		  XmlPatterns
-		  UiTools
-          Help
-		  REQUIRED)
+  if(MITK_USE_Qt6)
+    # Look for Qt at the superbuild level, so a missing Qt installation is
+    # reported before the MITK external project starts.
+    find_package(Qt6 6.10 COMPONENTS
+      Concurrent
+      Core
+      Core5Compat
+      Gui
+      Help
+      LinguistTools
+      Network
+      OpenGL
+      OpenGLWidgets
+      Qml
+      Sql
+      Svg
+      UiTools
+      WebEngineCore
+      WebEngineWidgets
+      Widgets
+      Xml
+      REQUIRED)
+
+    get_target_property(QT_QMAKE_EXECUTABLE Qt6::qmake LOCATION)
   endif()
 
   # Configure the set of default pixel types
@@ -119,9 +121,15 @@ if(NOT MITK_DIR)
     list(APPEND additional_mitk_cmakevars "-DBOOST_ROOT:PATH=${MITK_BOOST_ROOT}")
   endif()
 
-  set(MITK_SOURCE_DIR "" CACHE PATH "MITK source code location. If empty, MITK will be cloned from MITK_GIT_REPOSITORY")
-  set(MITK_GIT_REPOSITORY "https://github.com/araex/MITK" CACHE STRING "The git repository for cloning MITK")
-  set(MITK_GIT_TAG "7d42d2f04edceab33f9c162d98bf5adc7c550f2c" CACHE STRING "The git tag/hash to be used when cloning from MITK_GIT_REPOSITORY")
+  set(_mitk_local_source_dir "${CMAKE_CURRENT_SOURCE_DIR}/__MITK-2025.12.2")
+  if(EXISTS "${_mitk_local_source_dir}/CMakeLists.txt")
+    set(_mitk_default_source_dir "${_mitk_local_source_dir}")
+  endif()
+  set(MITK_SOURCE_DIR "${_mitk_default_source_dir}" CACHE PATH "MITK source code location. If empty, MITK will be cloned from MITK_GIT_REPOSITORY")
+  unset(_mitk_default_source_dir)
+  unset(_mitk_local_source_dir)
+  set(MITK_GIT_REPOSITORY "https://github.com/MITK/MITK.git" CACHE STRING "The git repository for cloning MITK")
+  set(MITK_GIT_TAG "v2025.12.2" CACHE STRING "The git tag/hash to be used when cloning from MITK_GIT_REPOSITORY")
   set(MITK_WHITELIST "VCLab")
   mark_as_advanced(MITK_SOURCE_DIR MITK_GIT_REPOSITORY MITK_GIT_TAG)
 
@@ -144,6 +152,7 @@ if(NOT MITK_DIR)
 
   get_filename_component(MITK_WHITELISTS_INTERNAL_PATH ${MITK_WHITELISTS_INTERNAL_PATH} ABSOLUTE)
   list(APPEND additional_mitk_cmakevars "-DMITK_WHITELIST:STRING=${MITK_WHITELIST}")
+  list(APPEND additional_mitk_cmakevars "-DMITK_BUILD_CONFIGURATION:STRING=${MITK_BUILD_CONFIGURATION}")
   list(APPEND additional_mitk_cmakevars "-DMITK_WHITELISTS_EXTERNAL_PATH:FILEPATH=${MITK_WHITELISTS_EXTERNAL_PATH}")
   list(APPEND additional_mitk_cmakevars "-DMITK_WHITELISTS_INTERNAL_PATH:FILEPATH=${MITK_WHITELISTS_INTERNAL_PATH}")
   list(APPEND additional_mitk_cmakevars "-DMITK_BUILD_ALL_PLUGINS:BOOL=${MITK_BUILD_ALL_PLUGINS}")
@@ -152,8 +161,16 @@ if(NOT MITK_DIR)
   # Additional MITK CMake variables
   #-----------------------------------------------------------------------------
 
-  if(MITK_USE_QT AND QT_QMAKE_EXECUTABLE)
-    list(APPEND additional_mitk_cmakevars "-DQT_QMAKE_EXECUTABLE:FILEPATH=${QT_QMAKE_EXECUTABLE}")
+  if(MITK_USE_Qt6 AND Qt6_DIR)
+    list(APPEND additional_mitk_cmakevars "-DQt6_DIR:PATH=${Qt6_DIR}")
+  endif()
+
+  # Forward the installed OpenSSL location into the external MITK configure
+  # step so MITK can discover its HTTP support on Windows.
+  set(MITK_OPENSSL_ROOT_DIR "" CACHE PATH "Path to the OpenSSL installation used by MITK")
+  mark_as_advanced(MITK_OPENSSL_ROOT_DIR)
+  if(MITK_OPENSSL_ROOT_DIR)
+    list(APPEND additional_mitk_cmakevars "-DOPENSSL_ROOT_DIR:PATH=${MITK_OPENSSL_ROOT_DIR}")
   endif()
 
   if(MITK_USE_CTK)
@@ -187,11 +204,26 @@ if(NOT MITK_DIR)
        )
   endif()
 
+  # MITK 2025.12.2 pins a few third-party projects whose declared CMake
+  # minimum version predates the compatibility floor enforced by CMake 4.
+  # Keep the workaround as an explicit, reproducible project patch instead
+  # of relying on manual edits in the local MITK checkout.
+  set(mitk_patch_command)
+  if(MITK_GIT_TAG STREQUAL "v2025.12.2")
+    set(mitk_patch_command
+      PATCH_COMMAND
+        ${CMAKE_COMMAND}
+        -DMITK_SOURCE_DIR:PATH=<SOURCE_DIR>
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/CMake/ApplyMITK2025CMake4Compat.cmake
+    )
+  endif()
+
   ExternalProject_Add(${proj}
     ${mitk_source_location}
     BINARY_DIR ${MITK_BINARY_DIR}
     PREFIX ${proj}${ep_suffix}
     INSTALL_COMMAND ""
+    ${mitk_patch_command}
     CMAKE_GENERATOR ${gen}
     CMAKE_ARGS
       ${ep_common_args}
@@ -209,6 +241,10 @@ if(NOT MITK_DIR)
 
   if(MITK_USE_SUPERBUILD)
     set(MITK_DIR "${CMAKE_CURRENT_BINARY_DIR}/${MITK_BINARY_DIR}/MITK-build")
+    # MITK's exported CMake package finds its third-party dependencies (Boost,
+    # ITK, VTK, and others) in this staged prefix. Keep it on the consuming
+    # project's search path when MITK is built through its superbuild.
+    list(PREPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_BINARY_DIR}/${MITK_BINARY_DIR}/ep")
   else()
     set(MITK_DIR "${CMAKE_CURRENT_BINARY_DIR}/${MITK_BINARY_DIR}")
   endif()
@@ -222,9 +258,9 @@ else()
   # Further, do some sanity checks in the case of a pre-built MITK
   set(my_itk_dir ${ITK_DIR})
   set(my_vtk_dir ${VTK_DIR})
-  set(my_qmake_executable ${QT_QMAKE_EXECUTABLE})
+  set(my_qt6_dir ${Qt6_DIR})
 
-  find_package(MITK REQUIRED)
+  find_package(MITK 2025.12.2 REQUIRED CONFIG)
 
   if(my_itk_dir AND ITK_DIR)
     if(NOT my_itk_dir STREQUAL ${ITK_DIR})
@@ -238,9 +274,9 @@ else()
     endif()
   endif()
 
-  if(my_qmake_executable AND MITK_QMAKE_EXECUTABLE)
-    if(NOT my_qmake_executable STREQUAL ${MITK_QMAKE_EXECUTABLE})
-      message(FATAL_ERROR "Qt qmake does not match:\n   ${MY_PROJECT_NAME}: ${my_qmake_executable}\n  MITK: ${MITK_QMAKE_EXECUTABLE}")
+  if(my_qt6_dir AND Qt6_DIR)
+    if(NOT my_qt6_dir STREQUAL ${Qt6_DIR})
+      message(FATAL_ERROR "Qt 6 packages do not match:\n   ${MY_PROJECT_NAME}: ${my_qt6_dir}\n  MITK: ${Qt6_DIR}")
     endif()
   endif()
 endif()

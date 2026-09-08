@@ -1,4 +1,10 @@
-cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
+if(WIN32)
+  set(MITK_GEM_CMAKE_MINIMUM_VERSION 3.31)
+else()
+  set(MITK_GEM_CMAKE_MINIMUM_VERSION 3.28)
+endif()
+
+cmake_minimum_required(VERSION ${MITK_GEM_CMAKE_MINIMUM_VERSION}...4.3 FATAL_ERROR)
 
 # Change project and application name to your own
 set(MY_PROJECT_NAME MITK-GEM)
@@ -29,6 +35,16 @@ if(${MY_PROJECT_NAME}_USE_SUPERBUILD)
   set(${MY_PROJECT_NAME}_BINARY_DIR ${PROJECT_BINARY_DIR})
 else()
   project(${MY_PROJECT_NAME})
+endif()
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# MSVC otherwise reports the obsolete 199711L value for __cplusplus.  ITK uses
+# this macro to validate ABI-compatible C++ language standards in consumers.
+if(MSVC)
+  add_compile_options(/Zc:__cplusplus)
 endif()
 
 #-----------------------------------------------------------------------------
@@ -126,15 +142,51 @@ endif()
 # Prerequesites
 #-----------------------------------------------------------------------------
 
-find_package(MITK 2016.03.0 REQUIRED)
+# MITK 2025.12.2 stages header-only Boost without an installed BoostConfig.cmake
+# package. CMake 3.31+ otherwise prefers config-mode Boost discovery, so use
+# the bundled FindBoost module while importing this MITK build.
+if(POLICY CMP0167)
+  cmake_policy(SET CMP0167 OLD)
+endif()
+if(POLICY CMP0219)
+  cmake_policy(SET CMP0219 NEW)
+endif()
+
+# CMake 4.x needs a Boost package configuration to import the header-only
+# Boost staged by MITK's superbuild.
+list(PREPEND CMAKE_PREFIX_PATH
+  "${CMAKE_CURRENT_SOURCE_DIR}/CMake/PackageDepends/Boost")
+
+# MITK's exported targets retain these public build-time dependencies.  Find
+# them before importing MITK so the imported link interfaces are complete.
+find_package(Boost 1.74 REQUIRED)
+find_package(OpenGL REQUIRED)
+find_package(OpenMP QUIET COMPONENTS CXX)
+if(NOT TARGET OpenMP::OpenMP_CXX)
+  # The MITK 2025.12.2 build was configured with MSVC's -openmp option but its
+  # exported package does not rediscover OpenMP for consumers.  Recreate the
+  # equivalent header-only CMake target; MSVC requires no extra link library.
+  add_library(OpenMP::OpenMP_CXX INTERFACE IMPORTED)
+  set_target_properties(OpenMP::OpenMP_CXX PROPERTIES
+    INTERFACE_COMPILE_OPTIONS "-openmp")
+endif()
+
+find_package(MITK 2025.12.2 REQUIRED CONFIG)
+
+# MITK uses this legacy variable when generating Windows launch scripts.  Qt 6
+# no longer sets it during package discovery, but qmake is installed with the
+# selected desktop kit and provides the required runtime-location query.
+if(MITK_USE_Qt6 AND NOT QT_QMAKE_EXECUTABLE AND Qt6_DIR)
+  get_filename_component(_gem_qt_prefix "${Qt6_DIR}/../../.." ABSOLUTE)
+  find_program(QT_QMAKE_EXECUTABLE NAMES qmake qmake.exe
+    HINTS "${_gem_qt_prefix}/bin" NO_DEFAULT_PATH)
+endif()
 
 if(COMMAND mitkFunctionCheckMitkCompatibility)
   mitkFunctionCheckMitkCompatibility(VERSIONS MITK_VERSION_PLUGIN_SYSTEM 1 REQUIRED)
 else()
-  message(SEND_ERROR "Your MITK version is too old. Please use Git hash b86bf28 or newer")
+  message(SEND_ERROR "The selected MITK package does not expose the expected compatibility helper.")
 endif()
-
-link_directories(${MITK_LINK_DIRECTORIES})
 
 #-----------------------------------------------------------------------------
 # CMake Function(s) and Macro(s)
@@ -146,7 +198,6 @@ set(CMAKE_MODULE_PATH
   )
 
 include(mitkFunctionCheckCompilerFlags)
-include(mitkFunctionGetGccVersion)
 include(mitkFunctionGetVersion)
 
 #-----------------------------------------------------------------------------
@@ -225,14 +276,6 @@ set(${PROJECT_NAME}_EXE_LINKER_FLAGS ${MITK_EXE_LINKER_FLAGS})
 set(${PROJECT_NAME}_SHARED_LINKER_FLAGS ${MITK_SHARED_LINKER_FLAGS})
 set(${PROJECT_NAME}_MODULE_LINKER_FLAGS ${MITK_MODULE_LINKER_FLAGS})
 
-# Add custom project flags here (e.g. for C++11 support)
-
-if(CMAKE_COMPILER_IS_GNUCXX)
-  # Get the gcc version. Some MITK CMake macros rely on the CMake
-  # variable GCC_VERSION being set.
-  mitkFunctionGetGccVersion(${CMAKE_CXX_COMPILER} GCC_VERSION)
-endif()
-
 #-----------------------------------------------------------------------------
 # Set C/CXX Flags
 #-----------------------------------------------------------------------------
@@ -297,11 +340,6 @@ endif()
 #-----------------------------------------------------------------------------
 # Qt support
 #-----------------------------------------------------------------------------
-
-if(MITK_USE_QT)
-  set(QT_QMAKE_EXECUTABLE ${MITK_QMAKE_EXECUTABLE})
-  add_definitions(-DQWT_DLL)
-endif()
 
 #-----------------------------------------------------------------------------
 # MITK modules

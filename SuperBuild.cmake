@@ -81,9 +81,10 @@ set(ep_common_cache_default_args
   "-DCMAKE_LIBRARY_PATH:PATH=${CMAKE_LIBRARY_PATH}"
 )
 
-if(Qt5_DIR)
+if(Qt6_DIR)
+  file(TO_CMAKE_PATH "${Qt6_DIR}" mitk_gem_qt6_dir_cmake)
   list(APPEND ep_common_cache_default_args
-    "-DQt5_DIR:PATH=${Qt5_DIR}"
+    "-DQt6_DIR:PATH=${mitk_gem_qt6_dir_cmake}"
   )
 endif()
 
@@ -162,8 +163,14 @@ set(proj ${MY_PROJECT_NAME}-Configure)
 
 set(cmake_cache_args)
 
-if(Qt5_DIR)
-  set(cmake_cache_args "-DQt5_DIR:PATH=${Qt5_DIR}")
+if(Qt6_DIR)
+  list(APPEND cmake_cache_args "-DQt6_DIR:PATH=${mitk_gem_qt6_dir_cmake}")
+endif()
+
+# CGAL is resolved by MITK-GEM itself, not by MITK. Forward an explicitly
+# selected package location into the nested project configure step.
+if(CGAL_DIR)
+  list(APPEND cmake_cache_args "-DCGAL_DIR:PATH=${CGAL_DIR}")
 endif()
 
 ExternalProject_Add(${proj}
@@ -204,13 +211,13 @@ ExternalProject_Add(${proj}
     -DCTEST_USE_LAUNCHERS:BOOL=${CTEST_USE_LAUNCHERS}
     # ----------------- Miscellaneous ---------------
     -D${MY_PROJECT_NAME}_SUPERBUILD_BINARY_DIR:PATH=${PROJECT_BINARY_DIR}
-    -DQT_QMAKE_EXECUTABLE:FILEPATH=${QT_QMAKE_EXECUTABLE}
+    -DQt6_DIR:PATH=${mitk_gem_qt6_dir_cmake}
     -DMITK_DIR:PATH=${MITK_DIR}
     -DITK_DIR:PATH=${ITK_DIR}
     -DVTK_DIR:PATH=${VTK_DIR}
     -DMITK_WHITELIST:STRING=${MITK_WHITELIST}
     -DMITK_WHITELISTS_EXTERNAL_PATH:STRING=${MITK_WHITELISTS_EXTERNAL_PATH}
-    -MITK_WHITELISTS_INTERNAL_PATH:STRING=${MITK_WHITELISTS_INTERNAL_PATH_ABS}
+    -DMITK_WHITELISTS_INTERNAL_PATH:STRING=${MITK_WHITELISTS_INTERNAL_PATH_ABS}
 
   SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}
   BINARY_DIR ${CMAKE_BINARY_DIR}/${MY_PROJECT_NAME}-build
