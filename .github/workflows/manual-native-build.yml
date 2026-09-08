@@ -139,22 +139,20 @@ jobs:
             -DMITK_BUILD_TESTING:BOOL=OFF \
             -DMITK_USE_Python3:BOOL=OFF
 
-      - name: Build MITK-GEM (Windows)
+      - name: Build and package MITK-GEM (Windows)
         if: matrix.id == 'windows'
         shell: pwsh
-        run: cmake --build build --target MITK-GEM-build --config '${{ inputs.build_type }}' --parallel 2
+        run: cmake --build build --target MITK-GEM-package --config '${{ inputs.build_type }}' --parallel 2
 
-      - name: Build MITK-GEM (Linux and macOS)
+      - name: Build and package MITK-GEM (Linux and macOS)
         if: matrix.id != 'windows'
         shell: bash
-        run: cmake --build build --target MITK-GEM-build --config '${{ inputs.build_type }}' --parallel 2
+        run: cmake --build build --target MITK-GEM-package --config '${{ inputs.build_type }}' --parallel 2
 
-      - name: Upload application files
+      - name: Upload portable package
         if: ${{ success() && inputs.upload_artifact }}
         uses: actions/upload-artifact@v4
         with:
-          name: MITK-GEM-${{ matrix.id }}-${{ inputs.build_type }}
+          name: MITK-GEM-${{ matrix.id }}-${{ inputs.build_type }}-portable
           if-no-files-found: error
-          path: |
-            build/MITK-GEM-build/bin/**
-            build/MITK-GEM-build/*.app/**
+          path: build/MITK-GEM-build/packages/*.zip
