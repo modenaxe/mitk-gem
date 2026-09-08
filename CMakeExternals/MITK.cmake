@@ -17,6 +17,8 @@ if(NOT MITK_DIR)
   option(MITK_BUILD_EXAMPLES "Build the MITK examples" OFF)
   option(MITK_BUILD_ALL_PLUGINS "Build all MITK plugins" OFF)
   option(MITK_BUILD_TESTING "Build the MITK unit tests" OFF)
+  option(MITK_GEM_BUILD_MITK_SEGMENTATION
+    "Build MITK's standard Segmentation workbench plug-in required by MITK-GEM" ON)
   set(MITK_BUILD_CONFIGURATION "Custom" CACHE STRING "MITK build configuration")
   option(MITK_USE_ACVD "Use Approximated Centroidal Voronoi Diagrams" ON)
   option(MITK_USE_CTK "Use CTK in MITK" ${MITK_USE_BLUEBERRY})
@@ -156,6 +158,21 @@ if(NOT MITK_DIR)
   list(APPEND additional_mitk_cmakevars "-DMITK_WHITELISTS_EXTERNAL_PATH:FILEPATH=${MITK_WHITELISTS_EXTERNAL_PATH}")
   list(APPEND additional_mitk_cmakevars "-DMITK_WHITELISTS_INTERNAL_PATH:FILEPATH=${MITK_WHITELISTS_INTERNAL_PATH}")
   list(APPEND additional_mitk_cmakevars "-DMITK_BUILD_ALL_PLUGINS:BOOL=${MITK_BUILD_ALL_PLUGINS}")
+
+  # MITK's whitelist filters the available plug-ins, but it deliberately does
+  # not turn on plug-ins which MITK declares OFF by default. MITK-GEM's default
+  # perspective embeds the standard Segmentation view, so request it explicitly.
+  # A plug-in cache key contains dots, which CMake cannot pass with -D, so use
+  # an initial-cache file instead.
+  if(MITK_GEM_BUILD_MITK_SEGMENTATION)
+    set(_mitk_gem_initial_cache
+      "${CMAKE_CURRENT_BINARY_DIR}/MITK-GEM-MITKInitialCache.cmake")
+    configure_file(
+      "${CMAKE_CURRENT_SOURCE_DIR}/CMake/MITK-GEM-MITKInitialCache.cmake.in"
+      "${_mitk_gem_initial_cache}"
+      @ONLY)
+    list(APPEND additional_mitk_cmakevars "-C${_mitk_gem_initial_cache}")
+  endif()
 
   #-----------------------------------------------------------------------------
   # Additional MITK CMake variables

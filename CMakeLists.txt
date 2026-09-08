@@ -414,6 +414,13 @@ include(mitkInstallRules)
 # plug-ins, and Qt resources.
 if(WIN32)
   get_filename_component(MITK_GEM_SUPERBUILD_ROOT "${MITK_DIR}" DIRECTORY)
+  # CGAL's prebuilt Windows package keeps GMP and MPFR outside MITK's
+  # superbuild prefix. GemMesher links to them dynamically, so retain their
+  # runtime directory for the portable-package deployment step.
+  set(MITK_GEM_GMP_RUNTIME_DIR "")
+  if(GMP_DIR AND EXISTS "${GMP_DIR}/bin")
+    set(MITK_GEM_GMP_RUNTIME_DIR "${GMP_DIR}/bin")
+  endif()
   get_filename_component(_mitk_gem_qt_bin "${QT_QMAKE_EXECUTABLE}" DIRECTORY)
   find_program(MITK_GEM_WINDEPLOYQT_EXECUTABLE
     NAMES windeployqt.exe

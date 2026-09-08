@@ -25,6 +25,9 @@ _gem_install_dlls("@MITK_DIR@/bin/${_gem_configuration}" "${_gem_install_bin}")
 _gem_install_dlls("@MITK_DIR@/bin/plugins/${_gem_configuration}" "${_gem_install_bin}/plugins")
 _gem_install_dlls("@MITK_GEM_SUPERBUILD_ROOT@/ep/bin" "${_gem_install_bin}")
 _gem_install_dlls("@MITK_GEM_SUPERBUILD_ROOT@/ep/src/CTK-build/CTK-build/bin/${_gem_configuration}" "${_gem_install_bin}")
+# GemMesher uses CGAL's GMP / MPFR runtime pair. They are not installed under
+# the MITK superbuild prefix and are therefore not found by the generic scan.
+_gem_install_dlls("@MITK_GEM_GMP_RUNTIME_DIR@" "${_gem_install_bin}")
 
 if(NOT EXISTS "${_gem_install_bin}/MITK-GEM.exe")
   message(FATAL_ERROR "MITK-GEM.exe was not installed before runtime deployment.")

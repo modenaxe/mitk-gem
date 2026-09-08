@@ -1,0 +1,6 @@
+# MITK-GEM requires the standard MITK Segmentation workbench view. The VCLab
+# whitelist makes this plug-in eligible, but MITK declares it OFF by default.
+# This initial-cache file is used because the dotted cache key cannot be passed
+# with CMake's -D command-line syntax.
+set(MITK_BUILD_org.mitk.gui.qt.segmentation ON CACHE BOOL
+  "Build the org.mitk.gui.qt.segmentation plug-in." FORCE)
