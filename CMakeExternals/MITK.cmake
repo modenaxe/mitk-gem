@@ -68,7 +68,6 @@ if(NOT MITK_DIR)
 		  Sql
 		  Svg
           Widgets
-		  WebEngine
 		  Xml
 		  XmlPatterns
 		  UiTools
