@@ -35,34 +35,46 @@ env:
   CMAKE_BUILD_PARALLEL_LEVEL: 2
 
 jobs:
+  select-platforms:
+    name: Select build platforms
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.select.outputs.matrix }}
+    steps:
+      - id: select
+        name: Create selected build matrix
+        shell: bash
+        env:
+          REQUESTED_PLATFORM: ${{ inputs.platform }}
+        run: |
+          case "$REQUESTED_PLATFORM" in
+            windows)
+              echo 'matrix={"include":[{"id":"windows","name":"Windows (required)","runner":"windows-2022","qt_arch":"win64_msvc2022_64","experimental":false}]}' >> "$GITHUB_OUTPUT"
+              ;;
+            linux)
+              echo 'matrix={"include":[{"id":"linux","name":"Linux (experimental)","runner":"ubuntu-24.04","qt_arch":"linux_gcc_64","experimental":true}]}' >> "$GITHUB_OUTPUT"
+              ;;
+            macos)
+              echo 'matrix={"include":[{"id":"macos","name":"macOS (experimental)","runner":"macos-15-intel","qt_arch":"clang_64","experimental":true}]}' >> "$GITHUB_OUTPUT"
+              ;;
+            all)
+              echo 'matrix={"include":[{"id":"windows","name":"Windows (required)","runner":"windows-2022","qt_arch":"win64_msvc2022_64","experimental":false},{"id":"linux","name":"Linux (experimental)","runner":"ubuntu-24.04","qt_arch":"linux_gcc_64","experimental":true},{"id":"macos","name":"macOS (experimental)","runner":"macos-15-intel","qt_arch":"clang_64","experimental":true}]}' >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Unsupported platform selection: $REQUESTED_PLATFORM" >&2
+              exit 1
+              ;;
+          esac
+
   build:
+    needs: select-platforms
     name: ${{ matrix.name }}
-    if: ${{ inputs.platform == 'all' || inputs.platform == matrix.id }}
     runs-on: ${{ matrix.runner }}
     continue-on-error: ${{ matrix.experimental }}
     timeout-minutes: 360
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          # This configuration mirrors the validated local toolchain.
-          - id: windows
-            name: Windows (required)
-            runner: windows-2022
-            qt_arch: win64_msvc2022_64
-            experimental: false
-          # The POSIX builds exercise the same source stack, but remain
-          # non-blocking until each platform has a successful baseline run.
-          - id: linux
-            name: Linux (experimental)
-            runner: ubuntu-24.04
-            qt_arch: linux_gcc_64
-            experimental: true
-          - id: macos
-            name: macOS (experimental)
-            runner: macos-15-intel
-            qt_arch: clang_64
-            experimental: true
+      matrix: ${{ fromJSON(needs.select-platforms.outputs.matrix) }}
 
     steps:
       - name: Check out source
