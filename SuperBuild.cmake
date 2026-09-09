@@ -167,16 +167,6 @@ if(Qt6_DIR)
   list(APPEND cmake_cache_args "-DQt6_DIR:PATH=${mitk_gem_qt6_dir_cmake}")
 endif()
 
-# GridCut is a header-only external dependency.  Its source must remain
-# outside this repository and is forwarded only to builds that explicitly
-# provide a licensed local copy.
-option(MITK_GEM_ENABLE_GRIDCUT "Enable GridCut when licensed headers are available" ON)
-set(MITK_GEM_GRIDCUT_DIR "${CMAKE_SOURCE_DIR}/__GridCut-1.3" CACHE PATH
-  "Path to a licensed GridCut source distribution")
-list(APPEND cmake_cache_args
-  "-DMITK_GEM_ENABLE_GRIDCUT:BOOL=${MITK_GEM_ENABLE_GRIDCUT}"
-  "-DMITK_GEM_GRIDCUT_DIR:PATH=${MITK_GEM_GRIDCUT_DIR}")
-
 # CGAL is resolved by MITK-GEM itself, not by MITK. Forward an explicitly
 # selected package location into the nested project configure step.
 if(CGAL_DIR)

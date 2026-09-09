@@ -64,12 +64,11 @@ Ubuntu 12.04 bundles cmake version 2.8.7, but you will need 3.4 in order to buil
 Follow the instructions here http://www.mitk.org/wiki/Developer_Tutorial_(Microsoft_Windows)".
 Remember to save the source and the build in a ** very short ** top-level directory.
 
-## Optional features
-### Using GridCut
-[GridCut](http://www.gridcut.com/) is an alternative min-cut / max-flow solver to use instead of [maxflow](https://pub.ist.ac.at/~vnk/software.html) in the GraphCut3D plugin. We've seen significant performance increase  in both speed and memory efficiency. For licensing reasons we cannot redistribute GridCut (neither in the source nor binary release), so you have to download and install it manually:
-1. Go to the [GridCut website](http://www.gridcut.com/) and download the source code.
-2. Copy the contents of the .zip archive to mitk-gem source code directory `Plugins/ch.zhaw.graphcut/src/internal/lib/GraphCut3D/lib/gridcut`
-3. Build `make -j 8`
+## GraphCut3D backend
+
+GraphCut3D uses the bundled GPLv3 [MAXFLOW v3.04](https://pub.ista.ac.at/~vnk/software.html)
+implementation by Yuri Boykov and Vladimir Kolmogorov. No separately licensed
+graph-cut dependency is required to build or redistribute MITK-GEM.
 
 # FAQ
 For questions regarding the usage of MITK-GEM, refer to our [application FAQ](http://araex.github.io/mitk-gem-site/#faq).

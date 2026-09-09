@@ -1,7 +1,7 @@
 ###################################################################
 #                                                                 #
 #    MAXFLOW - software for computing mincut/maxflow in a graph   #
-#                        Version 3.03                             #
+#                        Version 3.04                             #
 #    http://http://pub.ist.ac.at/~vnk/software.html               #
 #                                                                 #
 #    Yuri Boykov (yuri@csd.uwo.ca)                                #

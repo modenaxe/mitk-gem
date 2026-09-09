@@ -4,8 +4,8 @@ set(SRC_CPP_FILES
 
 set(INTERNAL_CPP_FILES
   ch_zhaw_graphcut_Activator.cpp
-  lib/GraphCut3D/lib/kolmogorov-3.03/graph.cpp
-  lib/GraphCut3D/lib/kolmogorov-3.03/maxflow.cpp
+  lib/GraphCut3D/lib/kolmogorov-3.04/graph.cpp
+  lib/GraphCut3D/lib/kolmogorov-3.04/maxflow.cpp
   GraphcutView.cpp
   GraphcutWorker.cpp
 )

@@ -19,7 +19,7 @@
 
 ========================
 
-	version 3.03
+	version 3.04
 
 	This software library implements the maxflow algorithm
 	described in
@@ -287,7 +287,7 @@ private:
 		arc			*parent;	// node's parent
 		node		*next;		// pointer to the next active node
 								//   (or to itself if it is the last node in the list)
-		int			TS;			// timestamp showing when DIST was computed
+		long			TS;			// timestamp showing when DIST was computed
 		int			DIST;		// distance to the terminal
 		int			is_sink : 1;	// flag showing whether the node is in the source or in the sink tree (if parent!=NULL)
 		int			is_marked : 1;	// set by mark_node()
@@ -335,7 +335,7 @@ private:
 
 	node				*queue_first[2], *queue_last[2];	// list of active nodes
 	nodeptr				*orphan_first, *orphan_last;		// list of pointers to orphans
-	int					TIME;								// monotonically increasing global counter
+	long					TIME;								// monotonically increasing global counter
 
 	/////////////////////////////////////////////////////////////////////////
 

@@ -10,7 +10,7 @@
 #ifndef __ImageGraphCut3DKolmogorovFilter_h_
 #define __ImageGraphCut3DKolmogorovFilter_h_
 
-#include "lib/kolmogorov-3.03/graph.h"
+#include "lib/kolmogorov-3.04/graph.h"
 #include "ImageGraphCut3DKolmogorovBoostBase.h"
 /*
  * Wraps kolmogorovs graph library
