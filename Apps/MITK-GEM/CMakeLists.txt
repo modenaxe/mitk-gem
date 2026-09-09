@@ -21,5 +21,11 @@ mitkFunctionCreateBlueBerryApplication(
 )
 mitk_use_modules(TARGET ${MY_APP_NAME}
   MODULES MitkAppUtil
-  PACKAGES Qt6|Widgets
+  PACKAGES
+    Qt6|Widgets
+    # MultiLabelSegmentation creates vtkGPUVolumeRayCastMapper instances
+    # whenever a segmentation becomes visible in a 3D renderer. The VTK
+    # implementation is selected through an object-factory registration, so
+    # the executable must initialise the OpenGL2 volume-rendering module.
+    VTK|RenderingVolumeOpenGL2
 )

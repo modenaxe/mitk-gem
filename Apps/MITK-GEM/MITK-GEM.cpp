@@ -18,6 +18,7 @@ See LICENSE.txt or http://www.mitk.org for details.
 #include <mitkBaseApplication.h>
 
 #include <QVariant>
+#include <vtkRenderingVolumeModule.h>
 
 int main(int argc, char** argv)
 {
