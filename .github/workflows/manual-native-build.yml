@@ -1,6 +1,7 @@
-name: Manual native build
+name: Native build
 
 on:
+  push:
   workflow_dispatch:
     inputs:
       platform:
@@ -40,13 +41,29 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.select.outputs.matrix }}
+      build_type: ${{ steps.select.outputs.build_type }}
+      upload_artifact: ${{ steps.select.outputs.upload_artifact }}
     steps:
       - id: select
         name: Create selected build matrix
         shell: bash
         env:
-          REQUESTED_PLATFORM: ${{ inputs.platform }}
+          REQUESTED_PLATFORM: ${{ github.event.inputs.platform }}
+          REQUESTED_BUILD_TYPE: ${{ github.event.inputs.build_type }}
+          REQUESTED_UPLOAD_ARTIFACT: ${{ github.event.inputs.upload_artifact }}
         run: |
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            REQUESTED_PLATFORM=windows
+            REQUESTED_BUILD_TYPE=Release
+            REQUESTED_UPLOAD_ARTIFACT=true
+          fi
+
+          : "${REQUESTED_PLATFORM:=windows}"
+          : "${REQUESTED_BUILD_TYPE:=Release}"
+          : "${REQUESTED_UPLOAD_ARTIFACT:=true}"
+          echo "build_type=$REQUESTED_BUILD_TYPE" >> "$GITHUB_OUTPUT"
+          echo "upload_artifact=$REQUESTED_UPLOAD_ARTIFACT" >> "$GITHUB_OUTPUT"
+
           case "$REQUESTED_PLATFORM" in
             windows)
               echo 'matrix={"include":[{"id":"windows","name":"Windows (required)","runner":"windows-2022","qt_arch":"win64_msvc2022_64","experimental":false}]}' >> "$GITHUB_OUTPUT"
@@ -75,6 +92,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.select-platforms.outputs.matrix) }}
+    env:
+      BUILD_TYPE: ${{ needs.select-platforms.outputs.build_type }}
 
     steps:
       - name: Check out source
@@ -142,7 +161,7 @@ jobs:
         shell: bash
         run: |
           cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE="${{ inputs.build_type }}" \
+            -DCMAKE_BUILD_TYPE="${{ env.BUILD_TYPE }}" \
             -DQt6_DIR:PATH="$QT_ROOT_DIR/lib/cmake/Qt6" \
             -DCGAL_DIR:PATH="$CGAL_DIR" \
             -DMITK_OPENSSL_ROOT_DIR:PATH="$MITK_OPENSSL_ROOT_DIR" \
@@ -154,17 +173,17 @@ jobs:
       - name: Build and package MITK-GEM (Windows)
         if: matrix.id == 'windows'
         shell: pwsh
-        run: cmake --build build --target MITK-GEM-package --config '${{ inputs.build_type }}' --parallel 2
+        run: cmake --build build --target MITK-GEM-package --config '${{ env.BUILD_TYPE }}' --parallel 2
 
       - name: Build and package MITK-GEM (Linux and macOS)
         if: matrix.id != 'windows'
         shell: bash
-        run: cmake --build build --target MITK-GEM-package --config '${{ inputs.build_type }}' --parallel 2
+        run: cmake --build build --target MITK-GEM-package --config '${{ env.BUILD_TYPE }}' --parallel 2
 
       - name: Upload portable package
-        if: ${{ success() && inputs.upload_artifact }}
+        if: ${{ success() && needs.select-platforms.outputs.upload_artifact == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: MITK-GEM-${{ matrix.id }}-${{ inputs.build_type }}-portable
+          name: MITK-GEM-${{ matrix.id }}-${{ env.BUILD_TYPE }}-portable
           if-no-files-found: error
           path: build/MITK-GEM-build/packages/*.zip
