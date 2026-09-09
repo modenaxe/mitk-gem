@@ -25,12 +25,18 @@ See LICENSE.txt or http://www.mitk.org for details.
 // Qt
 #include <QMessageBox>
 #include <QStyle>
+#include <QStringList>
+
+#include <exception>
 
 //mitk image
 #include <mitkImage.h>
 #include <mitkNodePredicateProperty.h>
 
+#include <itkMacro.h>
+
 #include "mitkGraphcutSegmentationToSurfaceFilter.h"
+#include "Voxel2MeshSegmentationUtils.h"
 
 const std::string Voxel2MeshView::VIEW_ID = "org.mitk.views.voxelmasktopolygonmesh";
 
@@ -60,8 +66,7 @@ void Voxel2MeshView::OnSelectionChanged(berry::IWorkbenchPart::Pointer /*source*
             } else {
                 firstImage = false;
             }
-            mitk::StringProperty* nameProperty= (mitk::StringProperty*)(node->GetProperty("name"));
-            selectedImageNames.append(nameProperty->GetValue());
+            selectedImageNames.append(QString::fromStdString(node->GetName()));
         }
         m_Controls.selectedImages->setText(selectedImageNames);
     }
@@ -70,26 +75,62 @@ void Voxel2MeshView::OnSelectionChanged(berry::IWorkbenchPart::Pointer /*source*
 void Voxel2MeshView::generateSurfaceButtonPressed() {
     // get data
     QList <mitk::DataNode::Pointer> nodes = this->GetDataManagerSelection();
-    SurfaceGeneratorParameters params = getParameters();
 
     if(nodes.empty()){
         setMandatoryField(m_Controls.selectedImages, true);
+        return;
     }
 
+    SurfaceGeneratorParameters params = getParameters();
+    QStringList errors;
+
     foreach(mitk::DataNode::Pointer node, nodes){
-        mitk::Image::Pointer img = dynamic_cast<mitk::Image *>(node->GetData());
-        mitk::Surface::Pointer surface = createSurface(img, params);
-        mitk::DataNode::Pointer surfaceNode = mitk::DataNode::New();
-        QString name("Surface");
-        surfaceNode->SetProperty("name", mitk::StringProperty::New(name.toUtf8().constData()));
-        surfaceNode->SetData(surface);
-        this->GetDataStorage()->Add( surfaceNode );
+        std::string error;
+        mitk::Image::Pointer img;
+        if (node.IsNull() || !Voxel2MeshSegmentationUtils::CreateMeshingImage(node->GetData(), img, error)) {
+            const QString nodeName = node.IsNotNull()
+              ? QString::fromStdString(node->GetName())
+              : QString("selected item");
+            errors.append(QString("%1: %2").arg(nodeName, QString::fromStdString(error)));
+            continue;
+        }
+
+        try {
+            mitk::Surface::Pointer surface = createSurface(img, params);
+            if (surface.IsNull()) {
+                errors.append(QString("%1: no surface could be generated.").arg(QString::fromStdString(node->GetName())));
+                continue;
+            }
+
+            mitk::DataNode::Pointer surfaceNode = mitk::DataNode::New();
+            QString name("Surface");
+            surfaceNode->SetProperty("name", mitk::StringProperty::New(name.toUtf8().constData()));
+            surfaceNode->SetData(surface);
+            this->GetDataStorage()->Add(surfaceNode, node);
+        }
+        catch (const itk::ExceptionObject& exception) {
+            errors.append(QString("%1: %2").arg(QString::fromStdString(node->GetName()), exception.GetDescription()));
+        }
+        catch (const std::exception& exception) {
+            errors.append(QString("%1: %2").arg(QString::fromStdString(node->GetName()), exception.what()));
+        }
+        catch (...) {
+            errors.append(QString("%1: surface generation failed due to an unknown error.").arg(QString::fromStdString(node->GetName())));
+        }
+    }
+
+    if (!errors.isEmpty()) {
+        QMessageBox::warning(nullptr, "Voxel-to-Mesh", errors.join("\n\n"));
     }
 
     mitk::RenderingManager::GetInstance()->RequestUpdateAll();
 }
 
 mitk::Surface::Pointer Voxel2MeshView::createSurface(mitk::Image::Pointer img, SurfaceGeneratorParameters params){
+    if (img.IsNull()) {
+        return nullptr;
+    }
+
     mitk::GraphcutSegmentationToSurfaceFilter::Pointer surfaceFilter = mitk::GraphcutSegmentationToSurfaceFilter::New();
 
     // set params

@@ -2,15 +2,19 @@ mitk_create_executable(GraphcutModernizationTest
   CPP_FILES
     GraphcutModernizationTest.cpp
     ${PROJECT_SOURCE_DIR}/Plugins/ch.zhaw.graphcut/src/internal/GraphcutSegmentationUtils.cpp
+    ${PROJECT_SOURCE_DIR}/Plugins/ch.zhaw.voxel2mesh/src/internal/Voxel2MeshSegmentationUtils.cpp
+    ${PROJECT_SOURCE_DIR}/Plugins/ch.zhaw.voxel2mesh/src/internal/mitkGraphcutSegmentationToSurfaceFilter.cpp
     ${PROJECT_SOURCE_DIR}/Plugins/ch.zhaw.graphcut/src/internal/lib/GraphCut3D/lib/kolmogorov-3.04/graph.cpp
     ${PROJECT_SOURCE_DIR}/Plugins/ch.zhaw.graphcut/src/internal/lib/GraphCut3D/lib/kolmogorov-3.04/maxflow.cpp
   INCLUDE_DIRS
     ${PROJECT_SOURCE_DIR}/Plugins/ch.zhaw.graphcut/src/internal
+    ${PROJECT_SOURCE_DIR}/Plugins/ch.zhaw.voxel2mesh/src/internal
   DEPENDS
     MitkCore
     MitkMultilabel
   PACKAGE_DEPENDS
     ITK
+    VTK|ImagingGeneral
   NO_INIT
   NO_INSTALL
   NO_BATCH_FILE

@@ -4,6 +4,7 @@ set(SRC_CPP_FILES
 
 set(INTERNAL_CPP_FILES
   ch_zhaw_voxel2mesh_Activator.cpp
+  Voxel2MeshSegmentationUtils.cpp
   Voxel2MeshView.cpp
   mitkGraphcutSegmentationToSurfaceFilter.cpp
 )

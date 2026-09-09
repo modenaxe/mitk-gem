@@ -3,6 +3,8 @@
  */
 
 #include "GraphcutSegmentationUtils.h"
+#include "Voxel2MeshSegmentationUtils.h"
+#include "mitkGraphcutSegmentationToSurfaceFilter.h"
 #include "lib/GraphCut3D/GraphCut.h"
 
 #include <mitkDataStorage.h>
@@ -10,8 +12,11 @@
 #include <mitkITKImageImport.h>
 #include <mitkPixelType.h>
 #include <mitkStandaloneDataStorage.h>
+#include <mitkSurface.h>
 
 #include <itkImage.h>
+
+#include <vtkPolyData.h>
 
 #include <cstdlib>
 #include <iostream>
@@ -211,6 +216,31 @@ int main()
     bool isLegacyBinary = false;
     Require(!resultNode->GetBoolProperty("binary", isLegacyBinary) || !isLegacyBinary,
             "Modern GraphCut output must not be marked as a legacy binary image.");
+
+    mitk::Image::Pointer meshingMask;
+    Require(Voxel2MeshSegmentationUtils::CreateMeshingImage(resultSegmentation, meshingMask, error), error);
+    Require(meshingMask.IsNotNull(), "Voxel-to-Mesh must extract a usable image mask from GraphCut's modern segmentation output.");
+    MaskImageType::Pointer meshingMaskItk;
+    mitk::CastToItkImage(meshingMask, meshingMaskItk);
+    Require(meshingMaskItk->GetPixel(foregroundIndex) == 1 && meshingMaskItk->GetPixel(backgroundIndex) == 0,
+            "The Voxel-to-Mesh bridge must preserve the GraphCut foreground label as a binary mask.");
+
+    auto surfaceFilter = mitk::GraphcutSegmentationToSurfaceFilter::New();
+    surfaceFilter->SetUseMedian(false);
+    surfaceFilter->SetUseGaussianSmoothing(false);
+    surfaceFilter->SetSmooth(false);
+    surfaceFilter->SetThreshold(127.5);
+    surfaceFilter->SetInput(meshingMask);
+    surfaceFilter->Update();
+    auto surface = surfaceFilter->GetOutput();
+    Require(surface != nullptr && surface->GetVtkPolyData() != nullptr
+              && surface->GetVtkPolyData()->GetNumberOfPoints() > 0,
+            "Voxel-to-Mesh must generate a non-empty surface from a modern GraphCut segmentation.");
+
+    mitk::Image::Pointer legacyMeshingImage;
+    Require(Voxel2MeshSegmentationUtils::CreateMeshingImage(mismatchedLegacyMask, legacyMeshingImage, error), error);
+    Require(legacyMeshingImage.GetPointer() == mismatchedLegacyMask.GetPointer(),
+            "Voxel-to-Mesh must preserve legacy image-mask inputs.");
 
     std::cout << "GraphCut modernization regression test passed." << std::endl;
     return EXIT_SUCCESS;
