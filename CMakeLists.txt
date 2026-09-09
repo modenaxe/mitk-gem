@@ -111,6 +111,9 @@ set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH}" CACHE PATH "")
 option(BUILD_SHARED_LIBS "Build ${MY_PROJECT_NAME} with shared libraries" ON)
 option(WITH_COVERAGE "Enable/Disable coverage" OFF)
 option(BUILD_TESTING "Test the project" ON)
+option(MITK_GEM_BUILD_GRAPHCUT_REGRESSION_TESTS
+  "Build the focused GraphCut3D modernization regression test without enabling legacy project tests."
+  OFF)
 
 option(${MY_PROJECT_NAME}_BUILD_ALL_PLUGINS "Build all ${MY_PROJECT_NAME} plugins" OFF)
 option(${MY_PROJECT_NAME}_BUILD_ALL_APPS "Build all ${MY_PROJECT_NAME} applications" OFF)
@@ -296,7 +299,7 @@ set(CMAKE_MODULE_LINKER_FLAGS ${${PROJECT_NAME}_MODULE_LINKER_FLAGS})
 # Testing
 #-----------------------------------------------------------------------------
 
-if(BUILD_TESTING)
+if(BUILD_TESTING OR MITK_GEM_BUILD_GRAPHCUT_REGRESSION_TESTS)
   enable_testing()
   include(CTest)
   mark_as_advanced(TCL_TCLSH DART_ROOT)
@@ -386,6 +389,10 @@ ctkMacroSetupPlugins(${PROJECT_PLUGINS}
 #-----------------------------------------------------------------------------
 
 add_subdirectory(Apps/MITK-GEM)
+
+if(MITK_GEM_BUILD_GRAPHCUT_REGRESSION_TESTS)
+  add_subdirectory(Testing)
+endif()
 
 #-----------------------------------------------------------------------------
 # Installation

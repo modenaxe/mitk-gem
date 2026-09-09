@@ -8,6 +8,7 @@
  */
 
 #include <thread>
+#include <exception>
 #include <itkBinaryThresholdImageFilter.h>
 
 #include "GraphcutWorker.h"
@@ -16,6 +17,7 @@
 GraphcutWorker::GraphcutWorker()
         : id(WorkbenchUtils::getId())
         , m_Sigma(50)
+        , m_boundaryDirection(BIDIRECTIONAL)
         , m_ForegroundPixelValue(255)
 {
 }
@@ -56,6 +58,7 @@ void GraphcutWorker::process() {
     MITK_INFO("ch.zhaw.graphcut") << "worker started";
     emit Worker::started(id);
 
+    m_output = nullptr;
     try{
         preparePipeline();
         m_graphCut->Update();
@@ -63,6 +66,10 @@ void GraphcutWorker::process() {
     } catch (itk::ExceptionObject &e){
         MITK_ERROR("ch.zhaw.graphcut") << "Exception caught during execution of pipeline 'GraphcutWorker'.";
         MITK_ERROR("ch.zhaw.graphcut") << e;
+    } catch (const std::exception &e) {
+        MITK_ERROR("ch.zhaw.graphcut") << "Standard exception caught during execution of pipeline 'GraphcutWorker': " << e.what();
+    } catch (...) {
+        MITK_ERROR("ch.zhaw.graphcut") << "Unknown exception caught during execution of pipeline 'GraphcutWorker'.";
     }
 
     MITK_INFO("ch.zhaw.graphcut") << "worker done";

@@ -13,10 +13,16 @@
 // MITK
 #include <berryISelectionListener.h>
 #include <QmitkAbstractView.h>
+#include <mitkDataNode.h>
 #include "ui_GraphcutViewControls.h"
 
 // Utils
+#include "GraphcutSegmentationUtils.h"
 #include "WorkbenchUtils.h"
+
+#include <map>
+
+class QComboBox;
 
 class GraphcutView : public QmitkAbstractView {
     Q_OBJECT
@@ -29,6 +35,8 @@ protected slots:
     void startButtonPressed();
     void refreshButtonPressed();
     void imageSelectionChanged();
+    void foregroundImageSelectionChanged();
+    void backgroundImageSelectionChanged();
     void workerHasStarted(unsigned int);
     void workerProgressUpdate(float progress, unsigned int id);
     void workerIsDone(itk::DataObject::Pointer, unsigned int);
@@ -51,9 +59,15 @@ private:
     void setWarningField(QWidget *, bool);
     void setErrorField(QWidget *, bool);
     void setQStyleSheetField(QWidget *, const char *, bool);
+    void updateSeedLabelSelector(mitk::DataNode *, QComboBox *);
+    bool getSeedSelection(QmitkDataStorageComboBox *,
+                          QComboBox *,
+                          GraphcutSegmentationUtils::SeedSelection &,
+                          QString &) const;
     bool isValidSelection();
     void lockGui(bool);
     unsigned int m_currentlyActiveWorkerCount;
+    std::map<unsigned int, mitk::DataNode::Pointer> m_referenceImageNodes;
 };
 
 #endif // GraphcutView_h

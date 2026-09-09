@@ -43,7 +43,7 @@ public:
         m_worker = worker;
     }
 private:
-    Worker *m_worker;
+    Worker *m_worker = nullptr;
 };
 
 class GraphcutWorker : public Worker {
