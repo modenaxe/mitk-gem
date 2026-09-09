@@ -27,11 +27,11 @@
 using namespace mitk;
 
 std::string WorkbenchUtils::getGemMajorVersion(){
-    return "2017.5";
+    return "2025.12";
 }
 
 std::string WorkbenchUtils::getGemMinorVersion() {
-    return ".0";
+    return ".2";
 }
 
 std::string WorkbenchUtils::getGemVersion() {

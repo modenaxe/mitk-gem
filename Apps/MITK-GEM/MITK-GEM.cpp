@@ -17,6 +17,7 @@ See LICENSE.txt or http://www.mitk.org for details.
 
 #include <mitkBaseApplication.h>
 
+#include <QCoreApplication>
 #include <QVariant>
 #include <vtkRenderingVolumeModule.h>
 
@@ -25,6 +26,7 @@ int main(int argc, char** argv)
   // Create a QApplication instance first
   mitk::BaseApplication myApp(argc, argv);
   myApp.setApplicationName("MITK-GEM");
+  QCoreApplication::setApplicationVersion("2025.12.2");
   myApp.setOrganizationName("ZHAW");
 
   myApp.setProperty(mitk::BaseApplication::PROP_APPLICATION, "ch.zhaw.gemapplication");

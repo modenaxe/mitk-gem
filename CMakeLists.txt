@@ -204,9 +204,10 @@ include(mitkFunctionGetVersion)
 # Set project specific options and variables (NOT available during superbuild)
 #-----------------------------------------------------------------------------
 
-set(${PROJECT_NAME}_VERSION_MAJOR "2017")
-set(${PROJECT_NAME}_VERSION_MINOR "5")
-set(${PROJECT_NAME}_VERSION_PATCH "0")
+# This MITK-GEM release is built against MITK 2025.12.2.
+set(${PROJECT_NAME}_VERSION_MAJOR "2025")
+set(${PROJECT_NAME}_VERSION_MINOR "12")
+set(${PROJECT_NAME}_VERSION_PATCH "2")
 set(${PROJECT_NAME}_VERSION_STRING "${${PROJECT_NAME}_VERSION_MAJOR}.${${PROJECT_NAME}_VERSION_MINOR}.${${PROJECT_NAME}_VERSION_PATCH}")
 
 # Ask the user if a console window should be shown with the applications
