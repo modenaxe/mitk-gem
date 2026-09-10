@@ -17,6 +17,7 @@ set(enabled_modules
   ImageExtraction
   ImageStatistics
   IOExt
+  LegacyIO
   LegacyGL
   MapperExt
   Multilabel
