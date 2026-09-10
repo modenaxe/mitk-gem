@@ -189,8 +189,10 @@ jobs:
         with:
           version: ${{ env.QT_VERSION }}
           arch: ${{ matrix.qt_arch }}
-          modules: qt5compat qtwebchannel qtwebengine
+          modules: qt5compat qtpositioning qtwebchannel qtwebengine
           cache: true
+          # Changing this prefix invalidates pre-Positioning installations.
+          cache-key-prefix: mitk-gem-qt-positioning-v1
 
       # Cache the pinned MITK source checkout, not generated build output.
       # The cache key changes with the source version and compatibility patch.
