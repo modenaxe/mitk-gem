@@ -35,6 +35,11 @@ env:
   QT_VERSION: 6.10.1
   CMAKE_VERSION: 4.3.0
   MITK_VERSION: v2025.12.2
+  # MITK 2025.12.2 requires the OpenSSL 3.0 series on Windows. Pin the full
+  # developer installer: it provides the headers and MSVC import libraries.
+  OPENSSL_VERSION: 3.0.22
+  OPENSSL_INSTALLER_URL: https://slproweb.com/download/Win64OpenSSL-3_0_22.exe
+  OPENSSL_INSTALLER_SHA256: 08a48026a3b862167832b38e50d7c8594ac63ab933cf678b77002e5c3a81e8ec
   # Pin the upstream commit that replaces the retired autoconf 2.71-3 MSYS2
   # archive used by GMP with the live 2.71-4 archive.
   VCPKG_COMMIT: 37bb045f3c7a747d3e5d1c13b6fe6a0aec4b5d00
@@ -141,11 +146,44 @@ jobs:
           echo "CGAL_DIR=$(brew --prefix cgal)/lib/cmake/CGAL" >> "$GITHUB_ENV"
           echo "MITK_OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)" >> "$GITHUB_ENV"
 
+      - name: Restore OpenSSL 3.0 installer cache
+        if: matrix.id == 'windows'
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/Win64OpenSSL-3_0_22.exe
+          key: ${{ runner.os }}-openssl-${{ env.OPENSSL_VERSION }}-${{ env.OPENSSL_INSTALLER_SHA256 }}
+
       - name: Prepare Windows build dependencies
         if: matrix.id == 'windows'
         shell: pwsh
         run: |
-          choco install openssl --yes --no-progress --limit-output
+          $openSslInstaller = Join-Path $env:RUNNER_TEMP 'Win64OpenSSL-3_0_22.exe'
+          $openSslRoot = 'C:\OpenSSL-Win64-3.0'
+          if (-not (Test-Path -LiteralPath $openSslInstaller)) {
+            Invoke-WebRequest -Uri $env:OPENSSL_INSTALLER_URL -OutFile $openSslInstaller
+          }
+          $openSslInstallerHash = (Get-FileHash -LiteralPath $openSslInstaller -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($openSslInstallerHash -ne $env:OPENSSL_INSTALLER_SHA256) {
+            throw "Downloaded OpenSSL installer checksum does not match the pinned SHA-256."
+          }
+          & $openSslInstaller /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- "/DIR=$openSslRoot"
+          if ($LASTEXITCODE -ne 0) {
+            throw "OpenSSL installer exited with code $LASTEXITCODE"
+          }
+          $requiredOpenSslFiles = @(
+            (Join-Path $openSslRoot 'bin\openssl.exe'),
+            (Join-Path $openSslRoot 'include\openssl\ssl.h'),
+            (Join-Path $openSslRoot 'lib\VC\x64\MD\libcrypto.lib'),
+            (Join-Path $openSslRoot 'lib\VC\x64\MD\libssl.lib')
+          )
+          $missingOpenSslFiles = @($requiredOpenSslFiles | Where-Object { -not (Test-Path -LiteralPath $_) })
+          if ($missingOpenSslFiles.Count -gt 0) {
+            throw "OpenSSL installation is missing required files: $($missingOpenSslFiles -join ', ')"
+          }
+          $openSslVersion = (& (Join-Path $openSslRoot 'bin\openssl.exe') version).Trim()
+          if ($openSslVersion -notmatch '^OpenSSL 3\.0\.22\b') {
+            throw "Expected OpenSSL 3.0.22, found: $openSslVersion"
+          }
           $vcpkgRoot = Join-Path $env:RUNNER_TEMP 'vcpkg'
           git init $vcpkgRoot
           git -C $vcpkgRoot remote add origin https://github.com/microsoft/vcpkg.git
@@ -163,7 +201,8 @@ jobs:
           $vcpkgBinaryCache = Join-Path $env:RUNNER_TEMP 'vcpkg-binary-cache'
           "VCPKG_ROOT=$vcpkgRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "VCPKG_BINARY_CACHE=$vcpkgBinaryCache" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          'MITK_OPENSSL_ROOT_DIR=C:\Program Files\OpenSSL-Win64' | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "MITK_OPENSSL_ROOT_DIR=$openSslRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "$openSslRoot\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
       - name: Restore vcpkg package cache
         if: matrix.id == 'windows'
