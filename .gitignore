@@ -7,6 +7,7 @@ bin-xcode/
 *.lo
 *.o
 *.obj
+/__*
 
 # Compiled Dynamic libraries
 *.so
