@@ -18,23 +18,44 @@
 #include <berryISelectionService.h>
 #include <berryIWorkbenchWindow.h>
 #include <mitkGridRepresentationProperty.h>
+#include <mitkException.h>
 #include <mitkImage.h>
 #include <mitkProgressBar.h>
 #include <mitkSurface.h>
+#include <vtkPolyData.h>
+#include <vtkSmartPointer.h>
 #include <vtkUnstructuredGrid.h>
 #include <QMessageBox>
 #include <QtConcurrentRun>
 
+#include <exception>
 #include <string>
 
+namespace
+{
+    mitk::Surface::Pointer CreateSurfaceSnapshot(mitk::Surface* surface)
+    {
+        if (surface == nullptr || surface->GetVtkPolyData() == nullptr)
+        {
+            return nullptr;
+        }
+
+        auto polyDataSnapshot = vtkSmartPointer<vtkPolyData>::New();
+        polyDataSnapshot->DeepCopy(surface->GetVtkPolyData());
+
+        auto surfaceSnapshot = mitk::Surface::New();
+        surfaceSnapshot->SetVtkPolyData(polyDataSnapshot);
+        return surfaceSnapshot;
+    }
+}
 
 const std::string VolumeMeshView::VIEW_ID = "org.mitk.views.volumemesher";
 
 VolumeMeshView::~VolumeMeshView() {
-    if(m_WorkerFuture.isRunning()){
-        QMessageBox::warning(0, "", "Volume mesher is still processing data. Waiting for task to finish...");
-        m_WorkerFuture.waitForFinished();
-    }
+    // The task owns immutable input and does not capture this view. Cancelling
+    // discards its result without blocking the GUI thread while a third-party
+    // mesher finishes its current operation.
+    m_WorkerWatcher.cancel();
 }
 
 void VolumeMeshView::SetFocus() {
@@ -71,10 +92,56 @@ void VolumeMeshView::CreateQtPartControl(QWidget *parent) {
 
     // signals
     connect(m_Controls.generateButton, SIGNAL(clicked()), this, SLOT(generateButtonClicked()));
-    connect(this, SIGNAL(invalidMeshingResultDetected()), this, SLOT(meshingFailed()));
+    connect(&m_WorkerWatcher, &QFutureWatcher<MeshingResult>::finished,
+            this, &VolumeMeshView::onMeshingFinished, Qt::QueuedConnection);
+}
+
+VolumeMeshView::MeshingResult VolumeMeshView::RunMeshing(mitk::Surface::Pointer surface,
+                                                          std::shared_ptr<gem::IMesher> mesher)
+{
+    MeshingResult result;
+
+    try
+    {
+        auto meshFilter = SurfaceToUnstructuredGridFilter::New();
+        meshFilter->SetInput(surface, std::move(mesher));
+        meshFilter->Update();
+
+        mitk::UnstructuredGrid::Pointer mesh = meshFilter->GetOutput();
+        if (mesh.IsNull() || mesh->GetVtkUnstructuredGrid() == nullptr
+            || mesh->GetVtkUnstructuredGrid()->GetNumberOfPoints() == 0
+            || mesh->GetVtkUnstructuredGrid()->GetNumberOfCells() == 0)
+        {
+            result.error = "Volume meshing did not produce any tetrahedral elements.";
+            return result;
+        }
+
+        result.mesh = mesh;
+    }
+    catch (const mitk::Exception& exception)
+    {
+        result.error = exception.GetDescription();
+    }
+    catch (const std::exception& exception)
+    {
+        result.error = exception.what();
+    }
+    catch (...)
+    {
+        result.error = "Volume meshing failed with an unknown error.";
+    }
+
+    return result;
 }
 
 void VolumeMeshView::generateButtonClicked() {
+    if (m_WorkerWatcher.future().isValid() && !m_WorkerWatcher.future().isFinished())
+    {
+        QMessageBox::information(nullptr, "Volume meshing in progress",
+                                 "Wait for the current volume-meshing task to finish.");
+        return;
+    }
+
     mitk::DataNode *surfaceNode = m_Controls.surfaceComboBox->GetSelectedNode();
 
     if (surfaceNode) {
@@ -108,36 +175,60 @@ void VolumeMeshView::generateButtonClicked() {
             spMesher = std::make_shared<gem::MesherCGAL>(options);
         }
 
-        auto work = [spMesher, surface, this](){
-            m_Controls.container->setEnabled(false);
-            mitk::ProgressBar::GetInstance()->AddStepsToDo(3);
-            mitk::ProgressBar::GetInstance()->Progress();
+        auto surfaceSnapshot = CreateSurfaceSnapshot(surface);
+        if (surfaceSnapshot.IsNull())
+        {
+            QMessageBox::warning(nullptr, "Invalid surface for volume meshing",
+                                 "The selected surface does not contain polygonal data.");
+            return;
+        }
 
-            auto meshFilter = SurfaceToUnstructuredGridFilter::New();
-            meshFilter->SetInput(surface, spMesher);
-            meshFilter->Update();
+        // All GUI state is captured before scheduling the task. The worker
+        // receives only immutable data and never accesses this view.
+        m_Controls.container->setEnabled(false);
+        mitk::ProgressBar::GetInstance()->AddStepsToDo(2);
+        mitk::ProgressBar::GetInstance()->Progress();
 
-            mitk::DataNode::Pointer newNode = mitk::DataNode::New();
-            auto mesh = meshFilter->GetOutput();
-            if(mesh->GetVtkUnstructuredGrid()->GetNumberOfPoints() == 0){
-                emit invalidMeshingResultDetected();
-            } else {
-                newNode->SetData(mesh);
-                newNode->SetProperty("name", mitk::StringProperty::New("tetrahedral mesh"));
-                newNode->SetProperty("layer", mitk::IntProperty::New(1));
-
-                // add result to the storage
-                this->GetDataStorage()->Add( newNode );
-            }
-
-            mitk::ProgressBar::GetInstance()->Progress(2);
-            m_Controls.container->setEnabled(true);
-        };
-
-        m_WorkerFuture = QtConcurrent::run(static_cast<std::function<void()>>(work));
+        m_WorkerWatcher.setFuture(QtConcurrent::run([surfaceSnapshot, spMesher]() {
+            return RunMeshing(surfaceSnapshot, spMesher);
+        }));
     }
 }
 
-void VolumeMeshView::meshingFailed() {
-    QMessageBox::warning(0, "Error", "Volume meshing failed. Make sure the input surface is closed. Check the <a href='http://araex.github.io/mitk-gem-site/#faq'>MITK-GEM FAQ</a> for more information.");
+void VolumeMeshView::onMeshingFinished()
+{
+    const auto result = m_WorkerWatcher.result();
+    std::string error = result.error;
+
+    if (error.empty())
+    {
+        try
+        {
+            auto newNode = mitk::DataNode::New();
+            newNode->SetData(result.mesh);
+            newNode->SetProperty("name", mitk::StringProperty::New("tetrahedral mesh"));
+            newNode->SetProperty("layer", mitk::IntProperty::New(1));
+            GetDataStorage()->Add(newNode);
+        }
+        catch (const mitk::Exception& exception)
+        {
+            error = exception.GetDescription();
+        }
+        catch (const std::exception& exception)
+        {
+            error = exception.what();
+        }
+        catch (...)
+        {
+            error = "The volume mesh was created, but could not be added to the data storage.";
+        }
+    }
+
+    mitk::ProgressBar::GetInstance()->Progress();
+    m_Controls.container->setEnabled(true);
+
+    if (!error.empty())
+    {
+        QMessageBox::warning(nullptr, "Volume meshing failed", QString::fromStdString(error));
+    }
 }

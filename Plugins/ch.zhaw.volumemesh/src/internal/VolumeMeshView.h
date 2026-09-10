@@ -13,10 +13,21 @@
 
 #include <berryISelectionListener.h>
 #include <QmitkAbstractView.h>
-#include <QFuture>
+#include <QFutureWatcher>
+
+#include <mitkSurface.h>
+#include <mitkUnstructuredGrid.h>
+
+#include <memory>
+#include <string>
 
 #include "ui_VolumeMeshViewControls.h"
 #include "TetgenOptionGrid.h"
+
+namespace gem
+{
+  class IMesher;
+}
 
 class VolumeMeshView : public QmitkAbstractView {
     Q_OBJECT
@@ -26,19 +37,26 @@ public:
 
     static const std::string VIEW_ID;
 
-    signals:
-    void invalidMeshingResultDetected();
-
 protected slots:
     void generateButtonClicked();
-    void meshingFailed();
+    void onMeshingFinished();
 
 protected:
     virtual void CreateQtPartControl(QWidget *parent) override;
     virtual void SetFocus() override;
 
+private:
+    struct MeshingResult
+    {
+        mitk::UnstructuredGrid::Pointer mesh;
+        std::string error;
+    };
+
+    static MeshingResult RunMeshing(mitk::Surface::Pointer surface,
+                                    std::shared_ptr<gem::IMesher> mesher);
+
     Ui::VolumeMeshViewControls m_Controls;
     TetgenOptionGrid m_TetgenOptionGrid;
 
-    QFuture<void> m_WorkerFuture;
+    QFutureWatcher<MeshingResult> m_WorkerWatcher;
 };
