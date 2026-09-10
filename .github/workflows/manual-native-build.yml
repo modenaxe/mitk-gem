@@ -189,10 +189,13 @@ jobs:
         with:
           version: ${{ env.QT_VERSION }}
           arch: ${{ matrix.qt_arch }}
-          modules: qt5compat qtpositioning qtwebchannel qtwebengine
+          # MITK 2025.12.2 also requires Qt State Machine. Keep this list in
+          # sync with CMakeExternals/MITK.cmake and MITK_QT6_COMPONENTS.
+          modules: qt5compat qtpositioning qtstatemachine qtwebchannel qtwebengine
           cache: true
-          # Changing this prefix invalidates pre-Positioning installations.
-          cache-key-prefix: mitk-gem-qt-positioning-v1
+          # Changing this prefix invalidates caches created before StateMachine
+          # was installed.
+          cache-key-prefix: mitk-gem-qt-statemachine-v1
 
       # Cache the pinned MITK source checkout, not generated build output.
       # The cache key changes with the source version and compatibility patch.

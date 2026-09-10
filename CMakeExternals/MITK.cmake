@@ -69,6 +69,7 @@ if(NOT MITK_DIR)
       OpenGLWidgets
       Qml
       Sql
+      StateMachine
       Svg
       UiTools
       WebEngineCore
