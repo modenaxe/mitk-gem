@@ -11,6 +11,7 @@
 
 #include "MesherCGAL.h"
 #include "MesherTetgen.h"
+#include "SurfaceMeshValidation.h"
 #include "SurfaceToUnstructuredGridFilter.h"
 #include "VolumeMeshView.h"
 #include "WorkbenchUtils.h"
@@ -23,6 +24,8 @@
 #include <vtkUnstructuredGrid.h>
 #include <QMessageBox>
 #include <QtConcurrentRun>
+
+#include <string>
 
 
 const std::string VolumeMeshView::VIEW_ID = "org.mitk.views.volumemesher";
@@ -76,6 +79,21 @@ void VolumeMeshView::generateButtonClicked() {
 
     if (surfaceNode) {
         mitk::Surface::Pointer surface = dynamic_cast<mitk::Surface *>(surfaceNode->GetData());
+
+        if (surface.IsNull())
+        {
+            QMessageBox::warning(nullptr, "Invalid surface for volume meshing",
+                                 "The selected data node does not contain a surface.");
+            return;
+        }
+
+        std::string validationError;
+        if (!gem::ValidateSurfaceForVolumeMeshing(surface->GetVtkPolyData(), validationError))
+        {
+            QMessageBox::warning(nullptr, "Invalid surface for volume meshing",
+                                 QString::fromStdString(validationError));
+            return;
+        }
 
         std::shared_ptr<gem::IMesher> spMesher;
         if(m_Controls.radioTetgen->isChecked())

@@ -10,11 +10,15 @@
  */
 
 #include "IMesher.h"
+#include "SurfaceMeshValidation.h"
 #include "SurfaceToUnstructuredGridFilter.h"
+#include <mitkException.h>
 #include <mitkSurface.h>
 #include <mitkUnstructuredGrid.h>
 #include <vtkPolyData.h>
 #include <vtkUnstructuredGrid.h>
+
+#include <string>
 
 void SurfaceToUnstructuredGridFilter::SetInput(const mitk::Surface *_surface, std::shared_ptr <gem::IMesher> spMesher)
 {
@@ -34,8 +38,26 @@ void SurfaceToUnstructuredGridFilter::GenerateOutputInformation()
 
 void SurfaceToUnstructuredGridFilter::GenerateData()
 {
+    const auto* surface = GetInput();
+    if (surface == nullptr)
+    {
+        mitkThrow() << "No surface has been selected for volume meshing.";
+    }
+
+    if (m_spMesher == nullptr)
+    {
+        mitkThrow() << "No volume mesher has been configured.";
+    }
+
+    auto* vtkSurface = surface->GetVtkPolyData();
+    std::string validationError;
+    if (!gem::ValidateSurfaceForVolumeMeshing(vtkSurface, validationError))
+    {
+        mitkThrow() << validationError;
+    }
+
     auto vtkMesh = vtkSmartPointer<vtkUnstructuredGrid>::New();
-    m_spMesher->SetInput(GetInput()->GetVtkPolyData());
+    m_spMesher->SetInput(vtkSurface);
     m_spMesher->SetOutput(vtkMesh);
     m_spMesher->Compute();
     GetOutput()->SetVtkUnstructuredGrid(vtkMesh);

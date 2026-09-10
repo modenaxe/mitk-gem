@@ -5,6 +5,7 @@ set(CPP_FILES
         IMesher.cpp
         MesherCGAL.cpp
         MesherTetgen.cpp
+        SurfaceMeshValidation.cpp
         )
 
 SET(H_FILES
