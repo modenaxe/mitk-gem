@@ -146,6 +146,11 @@ jobs:
           choco install openssl --yes --no-progress --limit-output
           $vcpkgRoot = Join-Path $env:RUNNER_TEMP 'vcpkg'
           git clone --depth 1 --branch $env:VCPKG_REF https://github.com/microsoft/vcpkg.git $vcpkgRoot
+          # The released gmp port refers to a retired MSYS2 autoconf archive.
+          # Remove this patch when VCPKG_REF is updated to a release containing the upstream fix.
+          $gmpPatch = Join-Path $env:GITHUB_WORKSPACE 'CMake\ci\vcpkg-gmp-autoconf-2.71-4.patch'
+          git -C $vcpkgRoot apply --check $gmpPatch
+          git -C $vcpkgRoot apply $gmpPatch
           & "$vcpkgRoot\bootstrap-vcpkg.bat" -disableMetrics
           $vcpkgBinaryCache = Join-Path $env:RUNNER_TEMP 'vcpkg-binary-cache'
           "VCPKG_ROOT=$vcpkgRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
@@ -160,7 +165,7 @@ jobs:
             ${{ runner.temp }}/vcpkg/downloads
             ${{ runner.temp }}/vcpkg/installed
             ${{ runner.temp }}/vcpkg-binary-cache
-          key: ${{ runner.os }}-vcpkg-${{ env.VCPKG_REF }}-cgal-x64-windows-${{ hashFiles('CMake/PackageDepends/MITK_CGAL_Config.cmake', 'Modules/GemMesher/CMakeLists.txt') }}
+          key: ${{ runner.os }}-vcpkg-${{ env.VCPKG_REF }}-cgal-x64-windows-${{ hashFiles('CMake/PackageDepends/MITK_CGAL_Config.cmake', 'Modules/GemMesher/CMakeLists.txt', 'CMake/ci/vcpkg-gmp-autoconf-2.71-4.patch') }}
 
       - name: Install CGAL (Windows)
         if: matrix.id == 'windows'
