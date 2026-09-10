@@ -427,8 +427,8 @@ QScrollArea{
               <property name="enabled">
                <bool>true</bool>
               </property>
-              <property name="toolTip">
-               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+             <property name="toolTip">
+               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;A zero-valued exterior voxel border is added automatically. This closes structures that meet an image boundary by placing a cap immediately outside the acquired volume.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
               </property>
               <property name="title">
                <string>Marching cubes</string>
@@ -497,6 +497,19 @@ QScrollArea{
                    </widget>
                   </item>
                  </layout>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLabel" name="boundaryClosureLabel">
+                 <property name="toolTip">
+                  <string>A zero-valued exterior voxel border is added automatically. This closes structures that meet an image boundary by placing a cap immediately outside the acquired volume.</string>
+                 </property>
+                 <property name="text">
+                  <string>A background border is added automatically to close structures touching the image boundary. The cap is placed just outside the acquired volume.</string>
+                 </property>
+                 <property name="wordWrap">
+                  <bool>true</bool>
+                 </property>
                 </widget>
                </item>
               </layout>

@@ -17,7 +17,10 @@
 #include <itkImage.h>
 
 #include <vtkPolyData.h>
+#include <vtkFeatureEdges.h>
+#include <vtkSmartPointer.h>
 
+#include <cmath>
 #include <cstdlib>
 #include <iostream>
 #include <stdexcept>
@@ -92,6 +95,47 @@ namespace
     image->SetGeometry(reference->GetGeometry()->Clone());
     image->SetVolume(pixels.data());
     return image;
+  }
+
+  mitk::Image::Pointer CreateBoundaryTouchingMask(const mitk::Image* reference)
+  {
+    const auto* dimensions = reference->GetDimensions();
+    const auto numberOfPixels = static_cast<std::size_t>(dimensions[0]) * dimensions[1] * dimensions[2];
+    std::vector<unsigned char> pixels(numberOfPixels, 0);
+
+    // This solid deliberately meets the x-min image boundary. Without an
+    // exterior background shell, marching cubes leaves that face open.
+    for (unsigned int z = 1; z + 1 < dimensions[2]; ++z)
+    {
+      for (unsigned int y = 1; y + 1 < dimensions[1]; ++y)
+      {
+        for (unsigned int x = 0; x <= dimensions[0] / 2; ++x)
+        {
+          pixels[Offset(x, y, z, dimensions[0], dimensions[1])] = 1;
+        }
+      }
+    }
+
+    auto image = mitk::Image::New();
+    image->Initialize(mitk::MakeScalarPixelType<unsigned char>(), 3, dimensions);
+    image->SetGeometry(reference->GetGeometry()->Clone());
+    image->SetVolume(pixels.data());
+    return image;
+  }
+
+  void RequireClosedSurface(const mitk::Surface* surface, const std::string& message)
+  {
+    Require(surface != nullptr && surface->GetVtkPolyData() != nullptr, message);
+
+    auto boundaryEdges = vtkSmartPointer<vtkFeatureEdges>::New();
+    boundaryEdges->SetInputData(surface->GetVtkPolyData());
+    boundaryEdges->BoundaryEdgesOn();
+    boundaryEdges->FeatureEdgesOff();
+    boundaryEdges->ManifoldEdgesOff();
+    boundaryEdges->NonManifoldEdgesOff();
+    boundaryEdges->Update();
+
+    Require(boundaryEdges->GetOutput()->GetNumberOfCells() == 0, message);
   }
 }
 
@@ -236,6 +280,25 @@ int main()
     Require(surface != nullptr && surface->GetVtkPolyData() != nullptr
               && surface->GetVtkPolyData()->GetNumberOfPoints() > 0,
             "Voxel-to-Mesh must generate a non-empty surface from a modern GraphCut segmentation.");
+
+    auto boundaryTouchingMask = CreateBoundaryTouchingMask(referenceImage);
+    auto boundarySurfaceFilter = mitk::GraphcutSegmentationToSurfaceFilter::New();
+    boundarySurfaceFilter->SetUseMedian(false);
+    boundarySurfaceFilter->SetUseGaussianSmoothing(false);
+    boundarySurfaceFilter->SetSmooth(false);
+    boundarySurfaceFilter->SetThreshold(127.5);
+    boundarySurfaceFilter->SetInput(boundaryTouchingMask);
+    boundarySurfaceFilter->Update();
+    auto boundarySurface = boundarySurfaceFilter->GetOutput();
+    Require(boundarySurface != nullptr && boundarySurface->GetVtkPolyData() != nullptr
+              && boundarySurface->GetVtkPolyData()->GetNumberOfPoints() > 0,
+            "Voxel-to-Mesh must generate a surface when foreground touches an image boundary.");
+    RequireClosedSurface(boundarySurface,
+                         "Voxel-to-Mesh must close the surface when foreground touches an image boundary.");
+    double boundarySurfaceBounds[6];
+    boundarySurface->GetVtkPolyData()->GetBounds(boundarySurfaceBounds);
+    Require(std::abs(boundarySurfaceBounds[0] + 0.5) < 1e-6,
+            "The image-boundary cap must be placed half a voxel outside the original image extent.");
 
     mitk::Image::Pointer legacyMeshingImage;
     Require(Voxel2MeshSegmentationUtils::CreateMeshingImage(mismatchedLegacyMask, legacyMeshingImage, error), error);

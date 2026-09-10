@@ -14,7 +14,7 @@ mitk_create_executable(GraphcutModernizationTest
     MitkMultilabel
   PACKAGE_DEPENDS
     ITK
-    VTK|ImagingGeneral
+    VTK|ImagingGeneral+ImagingCore+FiltersCore
   NO_INIT
   NO_INSTALL
   NO_BATCH_FILE

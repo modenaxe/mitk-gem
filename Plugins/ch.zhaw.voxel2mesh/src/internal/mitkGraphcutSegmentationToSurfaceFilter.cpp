@@ -1,10 +1,42 @@
 #include "mitkGraphcutSegmentationToSurfaceFilter.h"
 
 #include <vtkSmartPointer.h>
+#include <vtkImageConstantPad.h>
+#include <vtkImageData.h>
 #include <vtkImageShiftScale.h>
 #include <vtkImageThreshold.h>
 
 #include "mitkProgressBar.h"
+
+namespace
+{
+  vtkSmartPointer<vtkImageData> AddExteriorBackground(vtkImageData* image)
+  {
+    if (image == nullptr)
+    {
+      return nullptr;
+    }
+
+    int extent[6];
+    image->GetExtent(extent);
+
+    auto paddingFilter = vtkSmartPointer<vtkImageConstantPad>::New();
+    paddingFilter->SetInputData(image);
+    paddingFilter->SetOutputWholeExtent(extent[0] - 1,
+                                        extent[1] + 1,
+                                        extent[2] - 1,
+                                        extent[3] + 1,
+                                        extent[4] - 1,
+                                        extent[5] + 1);
+    paddingFilter->SetConstant(0.0);
+    paddingFilter->Update();
+
+    // Detach from the filter pipeline while retaining the padded scalar data.
+    auto paddedImage = vtkSmartPointer<vtkImageData>::New();
+    paddedImage->ShallowCopy(paddingFilter->GetOutput());
+    return paddedImage;
+  }
+}
 
 mitk::GraphcutSegmentationToSurfaceFilter::GraphcutSegmentationToSurfaceFilter()
         : m_UseMedian(false),
@@ -77,7 +109,18 @@ void mitk::GraphcutSegmentationToSurfaceFilter::GenerateData() {
         }
         ProgressBar::GetInstance()->Progress();
 
-        CreateSurface(t, vtkimage, surface, thresholdExpanded);
+        // Marching cubes can only create a contour where samples exist on
+        // both sides of the threshold. Add a zero-valued exterior voxel shell
+        // after all mask processing so foreground touching an image boundary
+        // is closed just outside the acquired volume. The input segmentation
+        // itself remains unchanged.
+        auto paddedImage = AddExteriorBackground(vtkimage);
+        if (paddedImage == nullptr)
+        {
+            mitkThrow() << "Could not add an exterior background border before surface extraction.";
+        }
+
+        CreateSurface(t, paddedImage, surface, thresholdExpanded);
         ProgressBar::GetInstance()->Progress();
     }
 
