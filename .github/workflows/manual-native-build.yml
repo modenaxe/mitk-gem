@@ -176,7 +176,7 @@ jobs:
         with:
           version: ${{ env.QT_VERSION }}
           arch: ${{ matrix.qt_arch }}
-          modules: qt5compat qtwebengine
+          modules: qt5compat qtwebchannel qtwebengine
           cache: true
 
       # Cache the pinned MITK source checkout, not generated build output.
