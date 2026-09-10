@@ -166,9 +166,14 @@ jobs:
           if ($openSslInstallerHash -ne $env:OPENSSL_INSTALLER_SHA256) {
             throw "Downloaded OpenSSL installer checksum does not match the pinned SHA-256."
           }
-          & $openSslInstaller /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- "/DIR=$openSslRoot"
-          if ($LASTEXITCODE -ne 0) {
-            throw "OpenSSL installer exited with code $LASTEXITCODE"
+          # The vendor installer is a GUI executable. Invoke it through
+          # Start-Process so PowerShell waits for completion and exposes a
+          # reliable exit code before checking its installed files.
+          $openSslInstallerProcess = Start-Process -FilePath $openSslInstaller `
+            -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=$openSslRoot") `
+            -Wait -PassThru
+          if ($openSslInstallerProcess.ExitCode -ne 0) {
+            throw "OpenSSL installer exited with code $($openSslInstallerProcess.ExitCode)"
           }
           $requiredOpenSslFiles = @(
             (Join-Path $openSslRoot 'bin\openssl.exe'),
