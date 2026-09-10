@@ -151,6 +151,14 @@ jobs:
           git -C $vcpkgRoot remote add origin https://github.com/microsoft/vcpkg.git
           git -C $vcpkgRoot fetch --depth 1 origin $env:VCPKG_COMMIT
           git -C $vcpkgRoot checkout --detach FETCH_HEAD
+          $vcpkgHead = (git -C $vcpkgRoot rev-parse HEAD).Trim()
+          if ($vcpkgHead -ne $env:VCPKG_COMMIT) {
+            throw "vcpkg checkout did not resolve the pinned commit: $vcpkgHead"
+          }
+          $gmpPort = Join-Path $vcpkgRoot 'ports\gmp\portfile.cmake'
+          if (-not (Select-String -LiteralPath $gmpPort -SimpleMatch 'autoconf2.71-2.71-4-any.pkg.tar.zst' -Quiet)) {
+            throw "Pinned vcpkg commit does not contain the required live GMP autoconf archive."
+          }
           & "$vcpkgRoot\bootstrap-vcpkg.bat" -disableMetrics
           $vcpkgBinaryCache = Join-Path $env:RUNNER_TEMP 'vcpkg-binary-cache'
           "VCPKG_ROOT=$vcpkgRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
