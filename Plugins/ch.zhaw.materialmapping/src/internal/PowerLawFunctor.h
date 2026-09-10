@@ -3,6 +3,8 @@
 #include <cmath>
 #include <map>
 #include <ostream>
+#include <stdexcept>
+#include <utility>
 
 #include "PowerLawParameters.h"
 
@@ -11,14 +13,24 @@
  */
 class PowerLawFunctor {
 public:
+    PowerLawFunctor();
+    PowerLawFunctor(const PowerLawFunctor& other);
+    PowerLawFunctor(PowerLawFunctor&& other) noexcept;
+    PowerLawFunctor& operator=(const PowerLawFunctor& other);
+    PowerLawFunctor& operator=(PowerLawFunctor&& other) noexcept;
+
     /**
      * Selects the correct power law for the given rho and applies it.
      */
     template<class TPixel>
     inline double operator()(const TPixel &_rho) const {
+        if (m_ParamMap.empty()) {
+            throw std::logic_error("Cannot evaluate a power-law functor without parameters.");
+        }
+
         auto it = m_ParamMap.upper_bound(_rho);
 
-        if (it != cached_it) {  // the PowerLawParameter comparator is rather slow, so we'll use the iterator
+        if (cached_param == nullptr || it != cached_it) {  // the PowerLawParameter comparator is rather slow, so we'll use the iterator
             if (it == m_ParamMap.end()) { // value is out of bounds, fall back on the last defined one
                 cached_param = &(*m_ParamMap.rbegin()).second;
             } else {
@@ -53,7 +65,10 @@ public:
      * the power law parameters turns out to be a surprisingly big performance boost.
      */
     mutable std::map<double, PowerLawParameters>::const_iterator cached_it;
-    mutable PowerLawParameters const *cached_param;
+    mutable PowerLawParameters const *cached_param = nullptr;
+
+private:
+    void ResetCache() const;
 };
 
 std::ostream &operator<<(std::ostream &_out, const PowerLawFunctor &_f);

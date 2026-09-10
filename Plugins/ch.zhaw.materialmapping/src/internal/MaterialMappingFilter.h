@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <utility>
 
 #include <mitkImage.h>
 #include <mitkUnstructuredGridToUnstructuredGridFilter.h>
@@ -68,12 +69,12 @@ public:
 
 	void SetDensityFunctor(BoneDensityFunctor&& _f)
 	{
-		m_BoneDensityFunctor = _f;
+		m_BoneDensityFunctor = std::move(_f);
 	}
 
 	void SetPowerLawFunctor(PowerLawFunctor&& _f)
 	{
-		m_PowerLawFunctor = _f;
+		m_PowerLawFunctor = std::move(_f);
 	}
 
 	void SetDoPeelStep(bool _b)
@@ -134,7 +135,8 @@ protected:
 	mitk::Image::Pointer m_IntensityImage;
 	BoneDensityFunctor m_BoneDensityFunctor;
 	PowerLawFunctor m_PowerLawFunctor;
-	bool m_DoPeelStep = true, m_VerboseOutput;
+	bool m_DoPeelStep = true;
+	bool m_VerboseOutput = false;
 	std::string m_VerboseOutputDirectory;
     std::string m_PointArrayName;
     std::string m_CellArrayName;

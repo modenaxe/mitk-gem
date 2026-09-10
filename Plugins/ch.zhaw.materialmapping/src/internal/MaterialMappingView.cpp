@@ -8,12 +8,19 @@
 #include <QShortcut>
 #include <QtConcurrentRun>
 #include <QWidget>
+#include <mitkException.h>
 #include <mitkImage.h>
+#include <mitkUnstructuredGrid.h>
 #include <tinyxml2.h>
 
 #include <vtkImageCast.h>
 #include <vtkCellArray.h>
 #include <vtkPointData.h>
+#include <vtkUnstructuredGrid.h>
+
+#include <exception>
+#include <string>
+#include <utility>
 
 #include "MaterialMappingView.h"
 #include "MaterialMappingHelper.h"
@@ -22,16 +29,42 @@
 #include "MaterialMappingFilter.h"
 #include "PowerLawWidget.h"
 
+namespace
+{
+    mitk::Image::Pointer CreateImageSnapshot(mitk::Image* image)
+    {
+        if (image == nullptr || !image->IsInitialized())
+        {
+            return nullptr;
+        }
+
+        // mitk::Image::Clone() copies image volumes and geometry.
+        return image->Clone();
+    }
+
+    mitk::UnstructuredGrid::Pointer CreateMeshSnapshot(mitk::UnstructuredGrid* mesh)
+    {
+        if (mesh == nullptr || mesh->GetVtkUnstructuredGrid() == nullptr)
+        {
+            return nullptr;
+        }
+
+        auto snapshot = mitk::UnstructuredGrid::New();
+        // Graft performs a VTK DeepCopy and retains geometry/properties.
+        snapshot->Graft(mesh);
+        return snapshot;
+    }
+}
+
 const std::string MaterialMappingView::VIEW_ID = "org.mitk.views.materialmapping";
 #ifdef MITK_GEM_ENABLE_GUI_TESTS
 Ui::MaterialMappingViewControls *MaterialMappingView::controls = nullptr;
 #endif
 
 MaterialMappingView::~MaterialMappingView() {
-    if(m_WorkerFuture.isRunning()){
-        QMessageBox::warning(0, "", "Material mapping is still processing data. Waiting for task to finish...");
-        m_WorkerFuture.waitForFinished();
-    }
+    // The task owns deep-copied inputs and does not capture this view. Do not
+    // block view destruction while the current algorithm call completes.
+    m_WorkerWatcher.cancel();
 }
 
 void MaterialMappingView::CreateQtPartControl(QWidget *parent) {
@@ -102,6 +135,8 @@ void MaterialMappingView::CreateQtPartControl(QWidget *parent) {
     connect(m_Controls.addPowerLawButton, SIGNAL(clicked()), m_PowerLawWidgetManager.get(), SLOT(addPowerLaw()));
     connect(m_Controls.removePowerLawButton, SIGNAL(clicked()), m_PowerLawWidgetManager.get(), SLOT(removePowerLaw()));
     connect(m_Controls.unitSelectionComboBox, SIGNAL(currentIndexChanged(int)), this, SLOT(unitSelectionChanged(int)));
+    connect(&m_WorkerWatcher, &QFutureWatcher<MappingResult>::finished,
+            this, &MaterialMappingView::onMaterialMappingFinished, Qt::QueuedConnection);
 
     m_Controls.unitSelectionComboBox->setCurrentIndex(0);
     unitSelectionChanged(0);
@@ -110,6 +145,48 @@ void MaterialMappingView::CreateQtPartControl(QWidget *parent) {
         widget->installEventFilter(this);
         widget->setFocusPolicy(Qt::StrongFocus); // prevents wheel from setting the focus
     }
+}
+
+MaterialMappingView::MappingResult MaterialMappingView::RunMaterialMapping(
+    mitk::UnstructuredGrid::Pointer mesh,
+    mitk::Image::Pointer image,
+    MappingConfiguration configuration)
+{
+    MappingResult result;
+
+    try
+    {
+        auto mappedMesh = MaterialMappingHelper::Compute(mesh,
+                                                          image,
+                                                          configuration.method,
+                                                          std::move(configuration.densityFunctor),
+                                                          std::move(configuration.powerLawFunctor),
+                                                          configuration.minimumElementValue);
+
+        if (mappedMesh.IsNull() || mappedMesh->GetVtkUnstructuredGrid() == nullptr
+            || mappedMesh->GetVtkUnstructuredGrid()->GetNumberOfPoints() == 0
+            || mappedMesh->GetVtkUnstructuredGrid()->GetNumberOfCells() == 0)
+        {
+            result.error = "Material mapping did not produce a valid volume mesh.";
+            return result;
+        }
+
+        result.mesh = mappedMesh;
+    }
+    catch (const mitk::Exception& exception)
+    {
+        result.error = exception.GetDescription();
+    }
+    catch (const std::exception& exception)
+    {
+        result.error = exception.what();
+    }
+    catch (...)
+    {
+        result.error = "Material mapping failed with an unknown error.";
+    }
+
+    return result;
 }
 
 void MaterialMappingView::deleteSelectedRows() {
@@ -130,6 +207,13 @@ void MaterialMappingView::deleteSelectedRows() {
 
 void MaterialMappingView::startButtonClicked() {
     MITK_INFO("ch.zhaw.materialmapping") << "processing input";
+    if (m_WorkerWatcher.future().isValid() && !m_WorkerWatcher.future().isFinished())
+    {
+        QMessageBox::information(nullptr, "Material mapping in progress",
+                                 "Wait for the current material-mapping task to finish.");
+        return;
+    }
+
     if (isValidSelection()) {
         mitk::DataNode *imageNode = m_Controls.greyscaleImageComboBox->GetSelectedNode();
         mitk::DataNode *ugridNode = m_Controls.unstructuredGridComboBox->GetSelectedNode();
@@ -137,42 +221,81 @@ void MaterialMappingView::startButtonClicked() {
         mitk::Image::Pointer image = dynamic_cast<mitk::Image *>(imageNode->GetData());
         mitk::UnstructuredGrid::Pointer ugrid = dynamic_cast<mitk::UnstructuredGrid *>(ugridNode->GetData());
 
-        auto work = [this, image, ugrid]() {
+        try
+        {
+            MappingConfiguration configuration{
+                gui::getSelectedMappingMethod(m_Controls),
+                gui::createDensityFunctor(m_Controls, m_CalibrationDataModel),
+                m_PowerLawWidgetManager->createFunctor(),
+                static_cast<float>(m_Controls.fParamSpinBox->value())
+            };
+
+            auto imageSnapshot = CreateImageSnapshot(image);
+            auto meshSnapshot = CreateMeshSnapshot(ugrid);
+            if (imageSnapshot.IsNull() || meshSnapshot.IsNull())
+            {
+                QMessageBox::warning(nullptr, "Invalid material-mapping input",
+                                     "The selected image or volume mesh could not be copied for processing.");
+                return;
+            }
+
+            // The worker receives only immutable snapshots and value objects;
+            // it never accesses this view, its widgets, or DataStorage.
             m_Controls.scrollArea->setEnabled(false);
+            m_WorkerWatcher.setFuture(QtConcurrent::run([meshSnapshot, imageSnapshot, configuration]() {
+                return RunMaterialMapping(meshSnapshot, imageSnapshot, configuration);
+            }));
+        }
+        catch (const mitk::Exception& exception)
+        {
+            QMessageBox::warning(nullptr, "Material mapping failed", exception.GetDescription());
+        }
+        catch (const std::exception& exception)
+        {
+            QMessageBox::warning(nullptr, "Material mapping failed", exception.what());
+        }
+        catch (...)
+        {
+            QMessageBox::warning(nullptr, "Material mapping failed",
+                                 "The material-mapping task could not be prepared.");
+        }
+    }
+}
 
-//            auto filter = MaterialMappingFilter::New();
-//            filter->SetInput(ugrid);
-//            filter->SetMethod(gui::getSelectedMappingMethod(m_Controls));
-//            filter->SetIntensityImage(image);
-//            filter->SetDensityFunctor(gui::createDensityFunctor(m_Controls, m_CalibrationDataModel));
-//            filter->SetPowerLawFunctor(m_PowerLawWidgetManager->createFunctor());
-//            filter->SetDoPeelStep(m_Controls.uParamCheckBox->isChecked());
-//            filter->SetNumberOfExtendImageSteps(m_Controls.eParamSpinBox->value());
-//            filter->SetMinElementValue(m_Controls.fParamSpinBox->value());
-//            auto result = filter->GetOutput();
-//            filter->Update();
+void MaterialMappingView::onMaterialMappingFinished()
+{
+    const auto result = m_WorkerWatcher.result();
+    std::string error = result.error;
 
-            auto result = MaterialMappingHelper::Compute(ugrid,
-                                                         image,
-                                                         gui::getSelectedMappingMethod(m_Controls),
-                                                         gui::createDensityFunctor(m_Controls, m_CalibrationDataModel),
-                                                         m_PowerLawWidgetManager->createFunctor(),
-                                                         m_Controls.fParamSpinBox->value());
-
-            mitk::DataNode::Pointer newNode = mitk::DataNode::New();
-            newNode->SetData(result);
-
-            // set some node properties
+    if (error.empty())
+    {
+        try
+        {
+            auto newNode = mitk::DataNode::New();
+            newNode->SetData(result.mesh);
             newNode->SetProperty("name", mitk::StringProperty::New("material mapped mesh"));
             newNode->SetProperty("layer", mitk::IntProperty::New(1));
+            GetDataStorage()->Add(newNode);
+        }
+        catch (const mitk::Exception& exception)
+        {
+            error = exception.GetDescription();
+        }
+        catch (const std::exception& exception)
+        {
+            error = exception.what();
+        }
+        catch (...)
+        {
+            error = "The material-mapped mesh could not be added to the data storage.";
+        }
+    }
 
-            // add result to the storage
-            this->GetDataStorage()->Add(newNode);
+    m_Controls.scrollArea->setEnabled(true);
 
-            m_Controls.scrollArea->setEnabled(true);
-        };
-
-        m_WorkerFuture = QtConcurrent::run(static_cast<std::function<void()>>(work));
+    if (!error.empty())
+    {
+        QMessageBox::warning(nullptr, "Material mapping failed", QString::fromStdString(error));
     }
 }
 

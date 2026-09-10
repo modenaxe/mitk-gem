@@ -3,7 +3,13 @@
 #include <berryISelectionListener.h>
 
 #include <QmitkAbstractView.h>
-#include <QFuture>
+#include <QFutureWatcher>
+
+#include <mitkImage.h>
+#include <mitkUnstructuredGrid.h>
+
+#include <memory>
+#include <string>
 
 #include "ui_MaterialMappingViewControls.h"
 #include "CalibrationDataModel.h"
@@ -11,6 +17,8 @@
 #include "test/Runner.h"
 #endif
 #include "BoneDensityFunctor.h"
+#include "MaterialMappingFilter.h"
+#include "PowerLawFunctor.h"
 #include "PowerLawWidgetManager.h"
 
 class MaterialMappingView : public QmitkAbstractView {
@@ -29,6 +37,7 @@ public:
 protected slots:
     void deleteSelectedRows();
     void startButtonClicked();
+    void onMaterialMappingFinished();
     void tableDataChanged();
     void unitSelectionChanged(int);
 #ifdef MITK_GEM_ENABLE_GUI_TESTS
@@ -44,6 +53,26 @@ protected:
     virtual void SetFocus() override {}; // required by blueberry
     bool isValidSelection();
 
+private:
+    struct MappingConfiguration
+    {
+        MaterialMappingFilter::Method method;
+        BoneDensityFunctor densityFunctor;
+        PowerLawFunctor powerLawFunctor;
+        float minimumElementValue;
+    };
+
+    struct MappingResult
+    {
+        mitk::UnstructuredGrid::Pointer mesh;
+        std::string error;
+    };
+
+    static MappingResult RunMaterialMapping(mitk::UnstructuredGrid::Pointer mesh,
+                                            mitk::Image::Pointer image,
+                                            MappingConfiguration configuration);
+
+protected:
     Ui::MaterialMappingViewControls m_Controls;
     CalibrationDataModel m_CalibrationDataModel;
 
@@ -52,5 +81,5 @@ protected:
 #endif
     std::unique_ptr<PowerLawWidgetManager> m_PowerLawWidgetManager;
 
-    QFuture<void> m_WorkerFuture;
+    QFutureWatcher<MappingResult> m_WorkerWatcher;
 };
