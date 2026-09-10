@@ -7,6 +7,7 @@
 #include "SurfaceToUnstructuredGridFilter.h"
 
 #include <mitkException.h>
+#include <mitkImage.h>
 #include <mitkSurface.h>
 
 #include <vtkCellArray.h>
@@ -76,6 +77,22 @@ namespace
       computeWasCalled = true;
     }
   };
+
+  class TestableSurfaceToUnstructuredGridFilter final : public SurfaceToUnstructuredGridFilter
+  {
+  public:
+    using Self = TestableSurfaceToUnstructuredGridFilter;
+    using Pointer = itk::SmartPointer<Self>;
+    itkNewMacro(Self);
+
+    void SetRawInput(itk::DataObject* input)
+    {
+      this->SetNthInput(0, input);
+    }
+
+  protected:
+    TestableSurfaceToUnstructuredGridFilter() = default;
+  };
 }
 
 int main()
@@ -114,6 +131,26 @@ int main()
     acceptingFilter->Update();
     Require(acceptingMesher->computeWasCalled,
             "The common preflight must allow a valid closed surface to reach its meshing backend.");
+
+    // A custom MITK pipeline can bypass the typed Surface overload. The common
+    // filter must still reject an image before either backend sees it.
+    auto imageInputFilter = TestableSurfaceToUnstructuredGridFilter::New();
+    auto image = mitk::Image::New();
+    imageInputFilter->SetRawInput(image.GetPointer());
+    Require(imageInputFilter->GetInput() == nullptr,
+            "A medical image must not be interpreted as a surface mesh.");
+
+    bool imageWasRejected = false;
+    try
+    {
+      imageInputFilter->Update();
+    }
+    catch (const mitk::Exception&)
+    {
+      imageWasRejected = true;
+    }
+    Require(imageWasRejected,
+            "The common volume-meshing filter must reject a medical image before meshing starts.");
 
     std::cout << "Volume meshing surface validation regression test passed." << std::endl;
     return EXIT_SUCCESS;

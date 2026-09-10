@@ -40,6 +40,7 @@ public:
 protected slots:
     void generateButtonClicked();
     void onMeshingFinished();
+    void onSurfaceSelectionChanged(const mitk::DataNode* node);
 
 protected:
     virtual void CreateQtPartControl(QWidget *parent) override;

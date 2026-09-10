@@ -10,6 +10,7 @@ set(INTERNAL_CPP_FILES
   GuiHelpers.cpp
   MaterialMappingFilter.cpp
   MaterialMappingHelper.cpp
+  MaterialMappingInputValidation.cpp
   MaterialMappingView.cpp
   PowerLawFunctor.cpp
   PowerLawParameters.cpp

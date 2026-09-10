@@ -101,3 +101,33 @@ if(EXECUTABLE_IS_ENABLED)
   set_property(TEST MaterialMappingConfigurationTest PROPERTY ENVIRONMENT "PATH=${_material_mapping_test_runtime_path}" APPEND)
   set_property(TEST MaterialMappingConfigurationTest PROPERTY ENVIRONMENT "US_DISABLE_AUTOLOADING=1" APPEND)
 endif()
+
+mitk_create_executable(MaterialMappingInputValidationTest
+  CPP_FILES
+    MaterialMappingInputValidationTest.cpp
+    ${PROJECT_SOURCE_DIR}/Plugins/ch.zhaw.materialmapping/src/internal/MaterialMappingInputValidation.cpp
+  INCLUDE_DIRS
+    ${PROJECT_SOURCE_DIR}/Plugins/ch.zhaw.materialmapping/src/internal
+  DEPENDS
+    MitkCore
+    MitkDataTypesExt
+    MitkMultilabel
+  PACKAGE_DEPENDS
+    VTK|CommonDataModel
+  NO_INIT
+  NO_INSTALL
+  NO_BATCH_FILE
+  NO_FEATURE_INFO
+)
+
+if(EXECUTABLE_IS_ENABLED)
+  set_target_properties(${EXECUTABLE_TARGET} PROPERTIES WIN32_EXECUTABLE FALSE)
+  add_test(NAME MaterialMappingInputValidationTest COMMAND $<TARGET_FILE:${EXECUTABLE_TARGET}>)
+
+  mitkFunctionGetLibrarySearchPaths(_material_mapping_input_validation_test_runtime_paths release RELEASE)
+  list(APPEND _material_mapping_input_validation_test_runtime_paths $ENV{PATH})
+  list(REMOVE_DUPLICATES _material_mapping_input_validation_test_runtime_paths)
+  string(REGEX REPLACE "\\;" "\\\\;" _material_mapping_input_validation_test_runtime_path "${_material_mapping_input_validation_test_runtime_paths}")
+  set_property(TEST MaterialMappingInputValidationTest PROPERTY ENVIRONMENT "PATH=${_material_mapping_input_validation_test_runtime_path}" APPEND)
+  set_property(TEST MaterialMappingInputValidationTest PROPERTY ENVIRONMENT "US_DISABLE_AUTOLOADING=1" APPEND)
+endif()

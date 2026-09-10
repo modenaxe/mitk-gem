@@ -28,7 +28,11 @@ void SurfaceToUnstructuredGridFilter::SetInput(const mitk::Surface *_surface, st
 
 const mitk::Surface *SurfaceToUnstructuredGridFilter::GetInput()
 {
-    return static_cast<const mitk::Surface *>(this->ProcessObject::GetInput(0));
+    // ProcessObject's generic SetInput overload remains publicly available to
+    // support MITK pipelines. Do not assume that callers used the typed
+    // overload above: an image or segmentation must fail preflight rather
+    // than be cast to a Surface and handed to TetGen or CGAL.
+    return dynamic_cast<const mitk::Surface *>(this->ProcessObject::GetInput(0));
 }
 
 void SurfaceToUnstructuredGridFilter::GenerateOutputInformation()

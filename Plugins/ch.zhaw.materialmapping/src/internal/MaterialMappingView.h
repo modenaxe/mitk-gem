@@ -72,6 +72,8 @@ private:
                                             mitk::Image::Pointer image,
                                             MappingConfiguration configuration);
 
+    void updateStartButtonState();
+
 protected:
     Ui::MaterialMappingViewControls m_Controls;
     CalibrationDataModel m_CalibrationDataModel;

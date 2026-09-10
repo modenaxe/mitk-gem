@@ -10,6 +10,9 @@
 #include <QWidget>
 #include <mitkException.h>
 #include <mitkImage.h>
+#include <mitkNodePredicateAnd.h>
+#include <mitkNodePredicateDataType.h>
+#include <mitkNodePredicateNot.h>
 #include <mitkUnstructuredGrid.h>
 #include <tinyxml2.h>
 
@@ -24,6 +27,7 @@
 
 #include "MaterialMappingView.h"
 #include "MaterialMappingHelper.h"
+#include "MaterialMappingInputValidation.h"
 #include "WorkbenchUtils.h"
 #include "GuiHelpers.h"
 #include "MaterialMappingFilter.h"
@@ -82,14 +86,20 @@ void MaterialMappingView::CreateQtPartControl(QWidget *parent) {
     setResizeMode(0, QHeaderView::Stretch);
     setResizeMode(1, QHeaderView::Stretch);
 
-    // data selectors
+    // Data selectors. The grid selector admits only unstructured grids, with
+    // the 3-D-cell check performed below. The intensity selector deliberately
+    // uses the exact MITK Image type: segmentation and specialized/vector
+    // image types are not suitable CT inputs.
+    m_Controls.unstructuredGridComboBox->SetPredicate(WorkbenchUtils::createIsUnstructuredGridTypePredicate());
     m_Controls.unstructuredGridComboBox->SetDataStorage(this->GetDataStorage());
     m_Controls.unstructuredGridComboBox->SetAutoSelectNewItems(false);
-    m_Controls.unstructuredGridComboBox->SetPredicate(WorkbenchUtils::createIsUnstructuredGridTypePredicate());
 
+    auto intensityImagePredicate = mitk::NodePredicateAnd::New(
+        mitk::NodePredicateDataType::New("Image"),
+        mitk::NodePredicateNot::New(WorkbenchUtils::createIsBinaryImageTypePredicate()));
+    m_Controls.greyscaleImageComboBox->SetPredicate(intensityImagePredicate);
     m_Controls.greyscaleImageComboBox->SetDataStorage(this->GetDataStorage());
     m_Controls.greyscaleImageComboBox->SetAutoSelectNewItems(false);
-    m_Controls.greyscaleImageComboBox->SetPredicate(WorkbenchUtils::createIsImageTypePredicate());
 
     // Optional GUI test controls are only compiled in testing builds.
 #ifdef MITK_GEM_ENABLE_GUI_TESTS
@@ -135,11 +145,16 @@ void MaterialMappingView::CreateQtPartControl(QWidget *parent) {
     connect(m_Controls.addPowerLawButton, SIGNAL(clicked()), m_PowerLawWidgetManager.get(), SLOT(addPowerLaw()));
     connect(m_Controls.removePowerLawButton, SIGNAL(clicked()), m_PowerLawWidgetManager.get(), SLOT(removePowerLaw()));
     connect(m_Controls.unitSelectionComboBox, SIGNAL(currentIndexChanged(int)), this, SLOT(unitSelectionChanged(int)));
+    connect(m_Controls.unstructuredGridComboBox, &QmitkDataStorageComboBox::OnSelectionChanged,
+            this, [this](const mitk::DataNode*) { updateStartButtonState(); });
+    connect(m_Controls.greyscaleImageComboBox, &QmitkDataStorageComboBox::OnSelectionChanged,
+            this, [this](const mitk::DataNode*) { updateStartButtonState(); });
     connect(&m_WorkerWatcher, &QFutureWatcher<MappingResult>::finished,
             this, &MaterialMappingView::onMaterialMappingFinished, Qt::QueuedConnection);
 
     m_Controls.unitSelectionComboBox->setCurrentIndex(0);
     unitSelectionChanged(0);
+    updateStartButtonState();
 
     for(auto *widget : m_Controls.scrollAreaWidgetContents->findChildren<QWidget*>()){
         widget->installEventFilter(this);
@@ -156,6 +171,14 @@ MaterialMappingView::MappingResult MaterialMappingView::RunMaterialMapping(
 
     try
     {
+        std::string validationError;
+        if (!MaterialMappingInputValidation::ValidateVolumeMesh(mesh.GetPointer(), validationError)
+            || !MaterialMappingInputValidation::ValidateIntensityImage(image.GetPointer(), validationError))
+        {
+            result.error = validationError;
+            return result;
+        }
+
         auto mappedMesh = MaterialMappingHelper::Compute(mesh,
                                                           image,
                                                           configuration.method,
@@ -320,23 +343,50 @@ bool MaterialMappingView::isValidSelection() {
     mitk::DataNode *imageNode = m_Controls.greyscaleImageComboBox->GetSelectedNode();
     mitk::DataNode *ugridNode = m_Controls.unstructuredGridComboBox->GetSelectedNode();
 
-    // set the mandatory field based on whether or not the nodes are NULL
-    gui::setMandatoryQSSField(m_Controls.greyscaleSelector, (imageNode == nullptr));
-    gui::setMandatoryQSSField(m_Controls.meshSelector, (ugridNode == nullptr));
+    std::string imageError;
+    std::string meshError;
+    const bool imageIsValid = MaterialMappingInputValidation::ValidateIntensityImageNode(imageNode, imageError);
+    const bool meshIsValid = MaterialMappingInputValidation::ValidateVolumeMeshNode(ugridNode, meshError);
 
-    if (imageNode && ugridNode) {
-        mitk::Image::Pointer image = dynamic_cast<mitk::Image *>(imageNode->GetData());
-        mitk::UnstructuredGrid::Pointer ugrid = dynamic_cast<mitk::UnstructuredGrid *>(ugridNode->GetData());
+    gui::setMandatoryQSSField(m_Controls.greyscaleSelector, !imageIsValid);
+    gui::setMandatoryQSSField(m_Controls.meshSelector, !meshIsValid);
 
-        if (image && ugrid) {
-            return true;
-        } else {
-            QString msg("Invalid data. Select an image and a unstructured grid.");
-            QMessageBox::warning(NULL, "Error", msg);
-        }
+    if (imageIsValid && meshIsValid)
+    {
+        return true;
     }
+
+    if ((imageNode != nullptr && !imageIsValid) || (ugridNode != nullptr && !meshIsValid))
+    {
+        QString message;
+        if (imageNode != nullptr && !imageIsValid)
+        {
+            message += QString::fromStdString(imageError);
+        }
+        if (ugridNode != nullptr && !meshIsValid)
+        {
+            if (!message.isEmpty())
+            {
+                message += "\n\n";
+            }
+            message += QString::fromStdString(meshError);
+        }
+        QMessageBox::warning(nullptr, "Invalid material-mapping input", message);
+    }
+
     MITK_INFO("ch.zhaw.materialmapping") << "invalid data selection";
     return false;
+}
+
+void MaterialMappingView::updateStartButtonState()
+{
+    std::string imageError;
+    std::string meshError;
+    const auto imageNode = m_Controls.greyscaleImageComboBox->GetSelectedNode();
+    const auto meshNode = m_Controls.unstructuredGridComboBox->GetSelectedNode();
+    const bool imageIsValid = MaterialMappingInputValidation::ValidateIntensityImageNode(imageNode, imageError);
+    const bool meshIsValid = MaterialMappingInputValidation::ValidateVolumeMeshNode(meshNode, meshError);
+    m_Controls.startButton->setEnabled(imageIsValid && meshIsValid);
 }
 
 void MaterialMappingView::unitSelectionChanged(int) {

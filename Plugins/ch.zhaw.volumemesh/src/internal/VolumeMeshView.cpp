@@ -25,6 +25,7 @@
 #include <vtkPolyData.h>
 #include <vtkSmartPointer.h>
 #include <vtkUnstructuredGrid.h>
+#include <QButtonGroup>
 #include <QMessageBox>
 #include <QtConcurrentRun>
 
@@ -65,10 +66,23 @@ void VolumeMeshView::SetFocus() {
 void VolumeMeshView::CreateQtPartControl(QWidget *parent) {
     m_Controls.setupUi(parent);
 
-    // data selectors
+    // Only mitk::Surface nodes may reach either volume-meshing backend. Set
+    // the predicate before attaching the data storage so the initial reset is
+    // already filtered as well.
+    m_Controls.surfaceComboBox->SetPredicate(WorkbenchUtils::createIsSurfaceTypePredicate());
     m_Controls.surfaceComboBox->SetDataStorage(this->GetDataStorage());
     m_Controls.surfaceComboBox->SetAutoSelectNewItems(false);
-    m_Controls.surfaceComboBox->SetPredicate(WorkbenchUtils::createIsSurfaceTypePredicate());
+
+    // The generated UI marks TetGen as checked, but a QButtonGroup makes the
+    // intended default and exclusivity explicit instead of relying on widget
+    // parentage or generated-widget initialization order.
+    auto* mesherButtonGroup = new QButtonGroup(m_Controls.frame);
+    mesherButtonGroup->setExclusive(true);
+    mesherButtonGroup->addButton(m_Controls.radioTetgen);
+    mesherButtonGroup->addButton(m_Controls.radioCGAL);
+    m_Controls.radioTetgen->setChecked(true);
+    m_Controls.settingsGroup->setVisible(true);
+    m_Controls.settingsCGAL->setVisible(false);
 
     // tetgen options
     tetgenbehavior options;
@@ -92,8 +106,18 @@ void VolumeMeshView::CreateQtPartControl(QWidget *parent) {
 
     // signals
     connect(m_Controls.generateButton, SIGNAL(clicked()), this, SLOT(generateButtonClicked()));
+    connect(m_Controls.surfaceComboBox, &QmitkDataStorageComboBox::OnSelectionChanged,
+            this, &VolumeMeshView::onSurfaceSelectionChanged);
     connect(&m_WorkerWatcher, &QFutureWatcher<MeshingResult>::finished,
             this, &VolumeMeshView::onMeshingFinished, Qt::QueuedConnection);
+
+    onSurfaceSelectionChanged(m_Controls.surfaceComboBox->GetSelectedNode().GetPointer());
+}
+
+void VolumeMeshView::onSurfaceSelectionChanged(const mitk::DataNode* node)
+{
+    const auto* surface = node == nullptr ? nullptr : dynamic_cast<const mitk::Surface*>(node->GetData());
+    m_Controls.generateButton->setEnabled(surface != nullptr);
 }
 
 VolumeMeshView::MeshingResult VolumeMeshView::RunMeshing(mitk::Surface::Pointer surface,
@@ -142,57 +166,68 @@ void VolumeMeshView::generateButtonClicked() {
         return;
     }
 
-    mitk::DataNode *surfaceNode = m_Controls.surfaceComboBox->GetSelectedNode();
+    auto surfaceNode = m_Controls.surfaceComboBox->GetSelectedNode();
 
-    if (surfaceNode) {
-        mitk::Surface::Pointer surface = dynamic_cast<mitk::Surface *>(surfaceNode->GetData());
-
-        if (surface.IsNull())
-        {
-            QMessageBox::warning(nullptr, "Invalid surface for volume meshing",
-                                 "The selected data node does not contain a surface.");
-            return;
-        }
-
-        std::string validationError;
-        if (!gem::ValidateSurfaceForVolumeMeshing(surface->GetVtkPolyData(), validationError))
-        {
-            QMessageBox::warning(nullptr, "Invalid surface for volume meshing",
-                                 QString::fromStdString(validationError));
-            return;
-        }
-
-        std::shared_ptr<gem::IMesher> spMesher;
-        if(m_Controls.radioTetgen->isChecked())
-        {
-            spMesher = std::make_shared<gem::MesherTetgen>(m_TetgenOptionGrid.getOptionsFromGui());
-        }
-        else
-        {
-            gem::MesherCGAL::SOptions options;
-            options.fEdgeSize = m_Controls.spinBoxSize->value();
-            options.fRadiusEdgeRatio = m_Controls.spinBoxRadiusEdgeRatio->value();
-            spMesher = std::make_shared<gem::MesherCGAL>(options);
-        }
-
-        auto surfaceSnapshot = CreateSurfaceSnapshot(surface);
-        if (surfaceSnapshot.IsNull())
-        {
-            QMessageBox::warning(nullptr, "Invalid surface for volume meshing",
-                                 "The selected surface does not contain polygonal data.");
-            return;
-        }
-
-        // All GUI state is captured before scheduling the task. The worker
-        // receives only immutable data and never accesses this view.
-        m_Controls.container->setEnabled(false);
-        mitk::ProgressBar::GetInstance()->AddStepsToDo(2);
-        mitk::ProgressBar::GetInstance()->Progress();
-
-        m_WorkerWatcher.setFuture(QtConcurrent::run([surfaceSnapshot, spMesher]() {
-            return RunMeshing(surfaceSnapshot, spMesher);
-        }));
+    if (surfaceNode.IsNull())
+    {
+        QMessageBox::warning(nullptr, "Invalid surface for volume meshing",
+                             "Select a surface mesh before generating a volume mesh.");
+        return;
     }
+
+    mitk::Surface::Pointer surface = dynamic_cast<mitk::Surface*>(surfaceNode->GetData());
+    if (surface.IsNull())
+    {
+        QMessageBox::warning(nullptr, "Invalid surface for volume meshing",
+                             "The selected data node does not contain a surface mesh."
+                             " Images and segmentations cannot be volume-meshed directly.");
+        return;
+    }
+
+    std::string validationError;
+    if (!gem::ValidateSurfaceForVolumeMeshing(surface->GetVtkPolyData(), validationError))
+    {
+        QMessageBox::warning(nullptr, "Invalid surface for volume meshing",
+                             QString::fromStdString(validationError));
+        return;
+    }
+
+    std::shared_ptr<gem::IMesher> spMesher;
+    if (m_Controls.radioTetgen->isChecked())
+    {
+        spMesher = std::make_shared<gem::MesherTetgen>(m_TetgenOptionGrid.getOptionsFromGui());
+    }
+    else if (m_Controls.radioCGAL->isChecked())
+    {
+        gem::MesherCGAL::SOptions options;
+        options.fEdgeSize = m_Controls.spinBoxSize->value();
+        options.fRadiusEdgeRatio = m_Controls.spinBoxRadiusEdgeRatio->value();
+        spMesher = std::make_shared<gem::MesherCGAL>(options);
+    }
+    else
+    {
+        QMessageBox::warning(nullptr, "No volume mesher selected",
+                             "Select TetGen or CGAL before generating a volume mesh.");
+        return;
+    }
+
+    auto surfaceSnapshot = CreateSurfaceSnapshot(surface);
+    if (surfaceSnapshot.IsNull())
+    {
+        QMessageBox::warning(nullptr, "Invalid surface for volume meshing",
+                             "The selected surface does not contain polygonal data.");
+        return;
+    }
+
+    // All GUI state is captured before scheduling the task. The worker
+    // receives only immutable data and never accesses this view.
+    m_Controls.container->setEnabled(false);
+    mitk::ProgressBar::GetInstance()->AddStepsToDo(2);
+    mitk::ProgressBar::GetInstance()->Progress();
+
+    m_WorkerWatcher.setFuture(QtConcurrent::run([surfaceSnapshot, spMesher]() {
+        return RunMeshing(surfaceSnapshot, spMesher);
+    }));
 }
 
 void VolumeMeshView::onMeshingFinished()
