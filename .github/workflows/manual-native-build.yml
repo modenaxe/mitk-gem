@@ -107,7 +107,7 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Locate pip cache
         id: pip-cache
@@ -117,7 +117,7 @@ jobs:
           "dir=$pipCacheDirectory" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Restore pip download cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ steps.pip-cache.outputs.dir }}
           key: ${{ runner.os }}-pip-cmake-${{ env.CMAKE_VERSION }}
@@ -148,7 +148,7 @@ jobs:
 
       - name: Restore OpenSSL 3.0 installer cache
         if: matrix.id == 'windows'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/Win64OpenSSL-3_0_22.exe
           key: ${{ runner.os }}-openssl-${{ env.OPENSSL_VERSION }}-${{ env.OPENSSL_INSTALLER_SHA256 }}
@@ -211,7 +211,7 @@ jobs:
 
       - name: Restore vcpkg package cache
         if: matrix.id == 'windows'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ${{ runner.temp }}/vcpkg/downloads
@@ -229,7 +229,7 @@ jobs:
           "CGAL_DIR=$env:VCPKG_ROOT\installed\x64-windows\share\cgal" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Install Qt
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@v4.3.1
         with:
           version: ${{ env.QT_VERSION }}
           arch: ${{ matrix.qt_arch }}
@@ -246,13 +246,13 @@ jobs:
       # The cache key changes with the source version and compatibility patch.
       - name: Restore MITK source cache
         id: mitk-source-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/mitk-source
           key: ${{ runner.os }}-mitk-source-${{ env.MITK_VERSION }}-${{ hashFiles('CMakeExternals/MITK.cmake', 'CMake/ApplyMITK2025CMake4Compat.cmake', 'CMake/MITK-GEM-MITKInitialCache.cmake.in') }}
 
       - name: Restore MITK external source cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           # MITK v2025.12.2 warns when its nested build directory exceeds 40
           # characters. `b` keeps the Windows GitHub workspace at that limit.
@@ -316,7 +316,7 @@ jobs:
 
       - name: Upload portable package
         if: ${{ success() && needs.select-platforms.outputs.upload_artifact == 'true' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: MITK-GEM-${{ matrix.id }}-${{ env.BUILD_TYPE }}-portable
           if-no-files-found: error
