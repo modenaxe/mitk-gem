@@ -254,7 +254,9 @@ jobs:
       - name: Restore MITK external source cache
         uses: actions/cache@v4
         with:
-          path: build/MITK-superbuild/ep/src
+          # MITK v2025.12.2 warns when its nested build directory exceeds 40
+          # characters. `b` keeps the Windows GitHub workspace at that limit.
+          path: b/MITK-superbuild/ep/src
           key: ${{ runner.os }}-mitk-external-sources-${{ env.MITK_VERSION }}-${{ hashFiles('CMakeExternals/MITK.cmake', 'CMake/ApplyMITK2025CMake4Compat.cmake', 'CMake/MITK-GEM-MITKInitialCache.cmake.in') }}
 
       - name: Prepare MITK source
@@ -277,7 +279,7 @@ jobs:
         if: matrix.id == 'windows'
         shell: pwsh
         run: |
-          cmake -S . -B build -G 'Visual Studio 17 2022' -A x64 `
+          cmake -S . -B b -G 'Visual Studio 17 2022' -A x64 `
             "-DQt6_DIR:PATH=$env:QT_ROOT_DIR\lib\cmake\Qt6" `
             "-DCGAL_DIR:PATH=$env:CGAL_DIR" `
             "-DMITK_SOURCE_DIR:PATH=$env:MITK_SOURCE_DIR" `
@@ -291,7 +293,7 @@ jobs:
         if: matrix.id != 'windows'
         shell: bash
         run: |
-          cmake -S . -B build -G Ninja \
+          cmake -S . -B b -G Ninja \
             -DCMAKE_BUILD_TYPE="${{ env.BUILD_TYPE }}" \
             -DQt6_DIR:PATH="$QT_ROOT_DIR/lib/cmake/Qt6" \
             -DCGAL_DIR:PATH="$CGAL_DIR" \
@@ -305,12 +307,12 @@ jobs:
       - name: Build and package MITK-GEM (Windows)
         if: matrix.id == 'windows'
         shell: pwsh
-        run: cmake --build build --target MITK-GEM-package --config '${{ env.BUILD_TYPE }}' --parallel 2
+        run: cmake --build b --target MITK-GEM-package --config '${{ env.BUILD_TYPE }}' --parallel 2
 
       - name: Build and package MITK-GEM (Linux and macOS)
         if: matrix.id != 'windows'
         shell: bash
-        run: cmake --build build --target MITK-GEM-package --config '${{ env.BUILD_TYPE }}' --parallel 2
+        run: cmake --build b --target MITK-GEM-package --config '${{ env.BUILD_TYPE }}' --parallel 2
 
       - name: Upload portable package
         if: ${{ success() && needs.select-platforms.outputs.upload_artifact == 'true' }}
@@ -318,4 +320,4 @@ jobs:
         with:
           name: MITK-GEM-${{ matrix.id }}-${{ env.BUILD_TYPE }}-portable
           if-no-files-found: error
-          path: build/MITK-GEM-build/packages/*.zip
+          path: b/MITK-GEM-build/packages/*.zip

@@ -36,6 +36,15 @@ if(NOT MITK_DIR)
     set(MITK_USE_Qt6 ON CACHE BOOL "Use Qt 6 in MITK" FORCE)
   endif()
 
+  # SuperBuild.cmake is included before this file initializes the MITK
+  # options. On a fresh build tree, its early Git lookup consequently cannot
+  # see MITK_USE_CTK yet, leaving the empty GIT_EXECUTABLE cache entry to be
+  # forwarded into MITK. Resolve Git after the option is known so that both
+  # CTK and MITK receive a concrete executable path on the first configure.
+  if(MITK_USE_CTK)
+    find_package(Git REQUIRED)
+  endif()
+
   mark_as_advanced(MITK_USE_SUPERBUILD
                    MITK_BUILD_ALL_PLUGINS
                    MITK_BUILD_TESTING
