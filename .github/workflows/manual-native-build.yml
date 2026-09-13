@@ -286,6 +286,7 @@ jobs:
             "-DMITK_OPENSSL_ROOT_DIR:PATH=$env:MITK_OPENSSL_ROOT_DIR" `
             '-DMITK-GEM_USE_SUPERBUILD:BOOL=ON' `
             '-DBUILD_TESTING:BOOL=OFF' `
+            '-DMITK_GEM_BUILD_FEM_EXPORT_TESTS:BOOL=ON' `
             '-DMITK_BUILD_TESTING:BOOL=OFF' `
             '-DMITK_USE_Python3:BOOL=OFF'
 
@@ -301,6 +302,7 @@ jobs:
             -DMITK_OPENSSL_ROOT_DIR:PATH="$MITK_OPENSSL_ROOT_DIR" \
             -DMITK-GEM_USE_SUPERBUILD:BOOL=ON \
             -DBUILD_TESTING:BOOL=OFF \
+            -DMITK_GEM_BUILD_FEM_EXPORT_TESTS:BOOL=ON \
             -DMITK_BUILD_TESTING:BOOL=OFF \
             -DMITK_USE_Python3:BOOL=OFF
 
@@ -313,6 +315,16 @@ jobs:
         if: matrix.id != 'windows'
         shell: bash
         run: cmake --build b --target MITK-GEM-package --config '${{ env.BUILD_TYPE }}' --parallel 2
+
+      - name: Test FEM exporters (Windows)
+        if: matrix.id == 'windows'
+        shell: pwsh
+        run: ctest --test-dir b/MITK-GEM-build -C '${{ env.BUILD_TYPE }}' -R '^GemFemExportTest_LegacyReference$' --output-on-failure
+
+      - name: Test FEM exporters (Linux and macOS)
+        if: matrix.id != 'windows'
+        shell: bash
+        run: ctest --test-dir b/MITK-GEM-build -C '${{ env.BUILD_TYPE }}' -R '^GemFemExportTest_LegacyReference$' --output-on-failure
 
       - name: Upload portable package
         if: ${{ success() && needs.select-platforms.outputs.upload_artifact == 'true' }}

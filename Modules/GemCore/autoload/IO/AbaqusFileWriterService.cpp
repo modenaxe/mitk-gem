@@ -1,6 +1,6 @@
-#include "AnsysFileWriterService.h"
+#include "AbaqusFileWriterService.h"
 #include "FemFileWriterServiceUtils.h"
-#include <GemIOMimeTypes.h>
+#include "GemIOMimeTypes.h"
 
 #include <mitkCustomMimeType.h>
 #include <mitkExceptionMacro.h>
@@ -9,31 +9,27 @@
 #include <fstream>
 #include <stdexcept>
 
-AnsysFileWriterService::AnsysFileWriterService(void)
-        : mitk::AbstractFileWriter(mitk::UnstructuredGrid::GetStaticNameOfClass(),
-                                   GemIOMimeTypes::ANSYS_MIMETYPE(),
-                                   "ANSYS Mechanical APDL material-mapped tetrahedral mesh")
+AbaqusFileWriterService::AbaqusFileWriterService()
+  : mitk::AbstractFileWriter(mitk::UnstructuredGrid::GetStaticNameOfClass(),
+                             GemIOMimeTypes::ABAQUS_MIMETYPE(),
+                             "Abaqus material-mapped tetrahedral mesh")
 {
     SetDefaultOptions(gem::io::writer_options::Defaults());
     RegisterService();
 }
 
-AnsysFileWriterService::AnsysFileWriterService(const AnsysFileWriterService &other)
-: mitk::AbstractFileWriter(other)
+AbaqusFileWriterService::AbaqusFileWriterService(const AbaqusFileWriterService &other)
+  : mitk::AbstractFileWriter(other)
 {
-
 }
 
-AnsysFileWriterService::~AnsysFileWriterService()
-{
+AbaqusFileWriterService::~AbaqusFileWriterService() = default;
 
-}
-
-void AnsysFileWriterService::Write()
+void AbaqusFileWriterService::Write()
 {
     const mitk::UnstructuredGrid *input = dynamic_cast<const mitk::UnstructuredGrid *>(GetInput());
     if (input == nullptr)
-        mitkThrow() << "ANSYS export requires a MITK unstructured grid.";
+        mitkThrow() << "Abaqus export requires a MITK unstructured grid.";
 
     ValidateOutputLocation();
     try
@@ -41,15 +37,15 @@ void AnsysFileWriterService::Write()
         mitk::AbstractFileWriter::LocalFile localFile(this);
         std::ofstream output(localFile.GetFileName().c_str(), std::ios::out | std::ios::trunc);
         if (!output.is_open())
-            mitkThrow() << "Could not open '" << GetOutputLocation() << "' for ANSYS export.";
+            mitkThrow() << "Could not open '" << GetOutputLocation() << "' for Abaqus export.";
 
         mitk::UnstructuredGrid *mutableInput = const_cast<mitk::UnstructuredGrid *>(input);
-        gem::io::WriteAnsys(output,
-                            mutableInput->GetVtkUnstructuredGrid(),
-                            gem::io::writer_options::Read(GetOptions()));
+        gem::io::WriteAbaqus(output,
+                             mutableInput->GetVtkUnstructuredGrid(),
+                             gem::io::writer_options::Read(GetOptions()));
         output.flush();
         if (!output.good())
-            mitkThrow() << "Failed to finish writing the ANSYS export to '" << GetOutputLocation() << "'.";
+            mitkThrow() << "Failed to finish writing the Abaqus export to '" << GetOutputLocation() << "'.";
     }
     catch (const mitk::Exception &)
     {
@@ -57,11 +53,11 @@ void AnsysFileWriterService::Write()
     }
     catch (const std::exception &exception)
     {
-        mitkThrow() << "ANSYS export failed: " << exception.what();
+        mitkThrow() << "Abaqus export failed: " << exception.what();
     }
 }
 
-mitk::IFileWriter::ConfidenceLevel AnsysFileWriterService::GetConfidenceLevel() const
+mitk::IFileWriter::ConfidenceLevel AbaqusFileWriterService::GetConfidenceLevel() const
 {
     if (mitk::AbstractFileWriter::GetConfidenceLevel() == Unsupported)
         return Unsupported;
@@ -74,7 +70,7 @@ mitk::IFileWriter::ConfidenceLevel AnsysFileWriterService::GetConfidenceLevel() 
     return gem::io::CanExportFemMesh(mutableInput->GetVtkUnstructuredGrid()) ? Supported : Unsupported;
 }
 
-AnsysFileWriterService* AnsysFileWriterService::Clone() const
+AbaqusFileWriterService *AbaqusFileWriterService::Clone() const
 {
-    return new AnsysFileWriterService(*this);
+    return new AbaqusFileWriterService(*this);
 }

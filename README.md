@@ -8,6 +8,7 @@ It is built on top of the [Medical Imaging Interaction Toolkit (MITK)](http://mi
 - Surface mesh generation
 - Tetrahedral mesh generation
 - Material mapping
+- Material-mapped volume-mesh export for Abaqus and ANSYS Mechanical APDL
 
 For more information, check our [website](http://araex.github.io/mitk-gem-site/) and our [simtk project](https://simtk.org/home/mitk-gem).
 
@@ -69,6 +70,23 @@ Remember to save the source and the build in a ** very short ** top-level direct
 GraphCut3D uses the bundled GPLv3 [MAXFLOW v3.04](https://pub.ista.ac.at/~vnk/software.html)
 implementation by Yuri Boykov and Vladimir Kolmogorov. No separately licensed
 graph-cut dependency is required to build or redistribute MITK-GEM.
+
+## Abaqus and ANSYS export
+
+Run Material Mapping on a tetrahedral volume mesh, select the mapped mesh in
+the Data Manager, and use **File > Save** or **Save As**. Choose one of:
+
+- **Abaqus material-mapped volume mesh (`.inp`)** for C3D4 or C3D10 elements.
+- **ANSYS Mechanical APDL material-mapped volume mesh (`.cdb`)** for SOLID285
+  or SOLID187 elements. Read this command file in Mechanical APDL with
+  `/INPUT`; it is not an archive produced by `CDWRITE`.
+
+The save-options dialog selects material-mapping method A or B, the maximum
+number of generated material definitions, and Poisson's ratio. Both exporters
+write nodes, elements, element/material assignments, and linear isotropic
+elastic properties. Coordinates and Young's moduli retain the input mesh's
+unit system; the exporters perform no unit conversion. Loads, contacts,
+boundary conditions, and analysis steps remain solver-model responsibilities.
 
 # FAQ
 For questions regarding the usage of MITK-GEM, refer to our [application FAQ](http://araex.github.io/mitk-gem-site/#faq).

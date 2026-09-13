@@ -10,6 +10,7 @@ public:
 
     using mitk::AbstractFileWriter::Write;
     virtual void Write(void) override;
+    virtual ConfidenceLevel GetConfidenceLevel() const override;
 
 private:
     AnsysFileWriterService(const AnsysFileWriterService &other);

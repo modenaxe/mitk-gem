@@ -9,6 +9,9 @@ public:
     static mitk::CustomMimeType ANSYS_MIMETYPE();
     static std::string ANSYS_MIMETYPE_NAME();
 
+    static mitk::CustomMimeType ABAQUS_MIMETYPE();
+    static std::string ABAQUS_MIMETYPE_NAME();
+
     static mitk::CustomMimeType ASCIIUGRID_MIMETYPE();
     static std::string ASCIIUGRID_MIMETYPE_NAME();
 

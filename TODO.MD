@@ -60,8 +60,8 @@ This roadmap is organized into five phases. The order is intentional: preserve t
 - [ ] Add unit, integration, end-to-end, geometry, export round-trip, and regression tests.
 - [ ] Add sanitizer and static-analysis jobs where supported.
 - [ ] Replace the undocumented ASCII export assumptions with a versioned schema and full precision.
-- [ ] Implement or remove the currently incomplete ANSYS exporter.
-- [ ] Align Abaqus, ANSYS, LS-DYNA, and VTU exporters with the current material-array model.
+- [x] Implement tested, self-contained Abaqus and ANSYS exporters for material-mapped tetrahedral meshes.
+- [ ] Align LS-DYNA and VTU exporters with the current material-array model.
 - [ ] Port Python 2 scripts to Python 3 with argument validation and automated tests.
 - [ ] Review and modernize or retire the MATLAB scripts.
 - [ ] Add developer documentation, user documentation, contribution guidelines, and a third-party license inventory.

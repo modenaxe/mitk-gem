@@ -114,6 +114,9 @@ option(BUILD_TESTING "Test the project" ON)
 option(MITK_GEM_BUILD_GRAPHCUT_REGRESSION_TESTS
   "Build the focused GraphCut3D modernization regression test without enabling legacy project tests."
   OFF)
+option(MITK_GEM_BUILD_FEM_EXPORT_TESTS
+  "Build the focused Abaqus/ANSYS exporter regression test without enabling legacy project tests."
+  OFF)
 
 option(${MY_PROJECT_NAME}_BUILD_ALL_PLUGINS "Build all ${MY_PROJECT_NAME} plugins" OFF)
 option(${MY_PROJECT_NAME}_BUILD_ALL_APPS "Build all ${MY_PROJECT_NAME} applications" OFF)
@@ -299,7 +302,7 @@ set(CMAKE_MODULE_LINKER_FLAGS ${${PROJECT_NAME}_MODULE_LINKER_FLAGS})
 # Testing
 #-----------------------------------------------------------------------------
 
-if(BUILD_TESTING OR MITK_GEM_BUILD_GRAPHCUT_REGRESSION_TESTS)
+if(BUILD_TESTING OR MITK_GEM_BUILD_GRAPHCUT_REGRESSION_TESTS OR MITK_GEM_BUILD_FEM_EXPORT_TESTS)
   enable_testing()
   include(CTest)
   mark_as_advanced(TCL_TCLSH DART_ROOT)

@@ -1,0 +1,25 @@
+# Reference fixture matching the data contract consumed by Scripts/writeAbaqusInput.m
+# and Scripts/WriteAnsysInput.m. The fifth node value is method C and must not be
+# emitted as a fourth Abaqus coordinate. Source element IDs are intentionally
+# non-contiguous; the solver exports generate deterministic contiguous IDs.
+#BEGIN NODES
+# node_id, x, y, z, method_C
+1, 0, 0, 0, 11
+2, 1, 0, 0, 12
+3, 0, 1, 0, 13
+4, 0, 0, 1, 14
+5, 2, 0, 0, 15
+6, 3, 0, 0, 16
+7, 2, 1, 0, 17
+8, 2, 0, 1, 18
+9, 4, 0, 0, 19
+10, 5, 0, 0, 20
+11, 4, 1, 0, 21
+12, 4, 0, 1, 22
+#END NODES
+#BEGIN ELEMENTS 4
+# element_id, n1, n2, n3, n4, method_A, method_B
+101, 1, 2, 3, 4, 100, 300
+205, 5, 6, 7, 8, 200, 200
+999, 9, 10, 11, 12, 300, 100
+#END ELEMENTS 4
