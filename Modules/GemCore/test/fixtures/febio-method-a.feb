@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- MITK-GEM FEBio mesh and mapped material; source map=GEM_METHOD_A; units=mm-N-s; geometry scale=1.00000000000000000e+00; Young's modulus scale=1.00000000000000000e+00 -->
+<febio_spec version="4.0">
+  <Module type="solid">
+    <units>mm-N-s</units>
+  </Module>
+  <Material>
+    <material id="1" name="MITK_GEM_BONE" type="isotropic elastic">
+      <E type="map">GEM_METHOD_A</E>
+      <v>2.99999999999999989e-01</v>
+    </material>
+  </Material>
+  <Mesh>
+    <Nodes name="MITK_GEM_NODES">
+      <node id="1">0.00000000000000000e+00,0.00000000000000000e+00,0.00000000000000000e+00</node>
+      <node id="2">1.00000000000000000e+00,0.00000000000000000e+00,0.00000000000000000e+00</node>
+      <node id="3">0.00000000000000000e+00,1.00000000000000000e+00,0.00000000000000000e+00</node>
+      <node id="4">0.00000000000000000e+00,0.00000000000000000e+00,1.00000000000000000e+00</node>
+      <node id="5">2.00000000000000000e+00,0.00000000000000000e+00,0.00000000000000000e+00</node>
+      <node id="6">3.00000000000000000e+00,0.00000000000000000e+00,0.00000000000000000e+00</node>
+      <node id="7">2.00000000000000000e+00,1.00000000000000000e+00,0.00000000000000000e+00</node>
+      <node id="8">2.00000000000000000e+00,0.00000000000000000e+00,1.00000000000000000e+00</node>
+      <node id="9">4.00000000000000000e+00,0.00000000000000000e+00,0.00000000000000000e+00</node>
+      <node id="10">5.00000000000000000e+00,0.00000000000000000e+00,0.00000000000000000e+00</node>
+      <node id="11">4.00000000000000000e+00,1.00000000000000000e+00,0.00000000000000000e+00</node>
+      <node id="12">4.00000000000000000e+00,0.00000000000000000e+00,1.00000000000000000e+00</node>
+    </Nodes>
+    <Elements type="tet4" name="MITK_GEM_BONE_DOMAIN">
+      <elem id="1">1,2,3,4</elem>
+      <elem id="2">5,6,7,8</elem>
+      <elem id="3">9,10,11,12</elem>
+    </Elements>
+  </Mesh>
+  <MeshDomains>
+    <SolidDomain name="MITK_GEM_BONE_DOMAIN" mat="MITK_GEM_BONE"/>
+  </MeshDomains>
+  <MeshData>
+    <ElementData name="GEM_METHOD_A" elem_set="MITK_GEM_BONE_DOMAIN">
+      <e lid="1">1.00000000000000000e+02</e>
+      <e lid="2">2.00000000000000000e+02</e>
+      <e lid="3">3.00000000000000000e+02</e>
+    </ElementData>
+  </MeshData>
+</febio_spec>

@@ -19,6 +19,7 @@ namespace
 {
   const char *const MethodAArrayName = "GEM_METHOD_A";
   const char *const MethodBArrayName = "GEM_METHOD_B";
+  const char *const MethodEArrayName = "GEM_METHOD_E";
 
   struct MaterialTable
   {
@@ -33,6 +34,13 @@ namespace
     MaterialTable materials;
   };
 
+  struct PreparedFebioMesh
+  {
+    int cellType = VTK_EMPTY_CELL;
+    vtkIdType nodesPerElement = 0;
+    std::vector<double> youngsModuli;
+  };
+
   std::string CellLabel(vtkIdType cellId)
   {
     return "cell " + std::to_string(static_cast<long long>(cellId + 1));
@@ -40,11 +48,37 @@ namespace
 
   void ValidateOptions(const gem::io::ExportOptions &options)
   {
+    if (options.materialMappingMethod != gem::io::MaterialMappingMethod::MethodA &&
+        options.materialMappingMethod != gem::io::MaterialMappingMethod::MethodB)
+      throw std::invalid_argument("Abaqus and ANSYS export support only material mapping method A or B.");
+
     if (options.maxMaterialDefinitions == 0)
       throw std::invalid_argument("Maximum material definitions must be greater than zero.");
 
     if (!std::isfinite(options.poissonRatio) || options.poissonRatio <= -1.0 || options.poissonRatio >= 0.5)
       throw std::invalid_argument("Poisson's ratio must be finite and strictly between -1 and 0.5.");
+  }
+
+  bool IsSupportedFebioUnitSystem(const std::string &unitSystem)
+  {
+    return unitSystem == "SI" || unitSystem == "mm-N-s" || unitSystem == "mm-kg-s" ||
+           unitSystem == "um-nN-s" || unitSystem == "CGS" || unitSystem == "mm-g-s" ||
+           unitSystem == "mm-mg-s";
+  }
+
+  void ValidateFebioOptions(const gem::io::FebioExportOptions &options)
+  {
+    if (!std::isfinite(options.poissonRatio) || options.poissonRatio <= -1.0 || options.poissonRatio >= 0.5)
+      throw std::invalid_argument("Poisson's ratio must be finite and strictly between -1 and 0.5.");
+
+    if (!IsSupportedFebioUnitSystem(options.unitSystem))
+      throw std::invalid_argument("FEBio unit system must be one of SI, mm-N-s, mm-kg-s, um-nN-s, CGS, mm-g-s, or mm-mg-s.");
+
+    if (!std::isfinite(options.geometryScale) || options.geometryScale <= 0.0)
+      throw std::invalid_argument("FEBio geometry scale must be finite and greater than zero.");
+
+    if (!std::isfinite(options.youngsModulusScale) || options.youngsModulusScale <= 0.0)
+      throw std::invalid_argument("FEBio Young's modulus scale must be finite and greater than zero.");
   }
 
   void ValidateTopology(vtkUnstructuredGrid *grid)
@@ -156,6 +190,63 @@ namespace
     return values;
   }
 
+  void ValidateFebioOrientation(vtkUnstructuredGrid *grid)
+  {
+    for (vtkIdType cellId = 0; cellId < grid->GetNumberOfCells(); ++cellId)
+    {
+      vtkCell *cell = grid->GetCell(cellId);
+      double corners[4][3] = {};
+      for (vtkIdType corner = 0; corner < 4; ++corner)
+        grid->GetPoint(cell->GetPointId(corner), corners[corner]);
+
+      double maximumEdgeSquared = 0.0;
+      for (int first = 0; first < 4; ++first)
+      {
+        for (int second = first + 1; second < 4; ++second)
+        {
+          const double dx = corners[second][0] - corners[first][0];
+          const double dy = corners[second][1] - corners[first][1];
+          const double dz = corners[second][2] - corners[first][2];
+          maximumEdgeSquared = std::max(maximumEdgeSquared, dx * dx + dy * dy + dz * dz);
+        }
+      }
+
+      const double ax = corners[1][0] - corners[0][0];
+      const double ay = corners[1][1] - corners[0][1];
+      const double az = corners[1][2] - corners[0][2];
+      const double bx = corners[2][0] - corners[0][0];
+      const double by = corners[2][1] - corners[0][1];
+      const double bz = corners[2][2] - corners[0][2];
+      const double cx = corners[3][0] - corners[0][0];
+      const double cy = corners[3][1] - corners[0][1];
+      const double cz = corners[3][2] - corners[0][2];
+      const double sixTimesSignedVolume =
+        ax * (by * cz - bz * cy) - ay * (bx * cz - bz * cx) + az * (bx * cy - by * cx);
+      const double lengthScale = std::sqrt(maximumEdgeSquared);
+      const double volumeTolerance =
+        64.0 * std::numeric_limits<double>::epsilon() * lengthScale * lengthScale * lengthScale;
+
+      // ValidateTopology has already rejected degenerate and non-finite cells.
+      // FEBio expects a consistent, positive tetrahedral orientation.
+      if (sixTimesSignedVolume <= volumeTolerance)
+        throw std::invalid_argument(CellLabel(cellId) +
+                                    " has inverted tetrahedral orientation. Reorient the volume mesh before FEBio export.");
+    }
+  }
+
+  void ValidateFebioCoordinates(vtkUnstructuredGrid *grid, double geometryScale)
+  {
+    for (vtkIdType pointId = 0; pointId < grid->GetNumberOfPoints(); ++pointId)
+    {
+      double point[3] = {};
+      grid->GetPoint(pointId, point);
+      if (!std::isfinite(point[0] * geometryScale) || !std::isfinite(point[1] * geometryScale) ||
+          !std::isfinite(point[2] * geometryScale))
+        throw std::invalid_argument("FEBio geometry scale produces a non-finite coordinate at node " +
+                                    std::to_string(static_cast<long long>(pointId + 1)) + ".");
+    }
+  }
+
   MaterialTable QuantizeMaterials(const std::vector<double> &values, unsigned int maxMaterialDefinitions)
   {
     MaterialTable result;
@@ -231,10 +322,37 @@ namespace
     return result;
   }
 
+  PreparedFebioMesh PrepareFebio(vtkUnstructuredGrid *grid, const gem::io::FebioExportOptions &options)
+  {
+    ValidateFebioOptions(options);
+    ValidateTopology(grid);
+    ValidateFebioOrientation(grid);
+    ValidateFebioCoordinates(grid, options.geometryScale);
+
+    PreparedFebioMesh result;
+    result.cellType = grid->GetCellType(0);
+    result.nodesPerElement = result.cellType == VTK_TETRA ? 4 : 10;
+    result.youngsModuli = ReadMaterialValues(grid, options.materialMappingMethod);
+    for (vtkIdType cellId = 0; cellId < grid->GetNumberOfCells(); ++cellId)
+    {
+      const double scaledValue = result.youngsModuli[static_cast<std::size_t>(cellId)] * options.youngsModulusScale;
+      if (!std::isfinite(scaledValue) || scaledValue <= 0.0)
+        throw std::invalid_argument("FEBio Young's modulus scale produces an invalid value at " + CellLabel(cellId) + ".");
+      result.youngsModuli[static_cast<std::size_t>(cellId)] = scaledValue;
+    }
+    return result;
+  }
+
   void ConfigureNumericOutput(std::ostream &output)
   {
     output.imbue(std::locale::classic());
     output << std::scientific << std::setprecision(15);
+  }
+
+  void ConfigureFebioNumericOutput(std::ostream &output)
+  {
+    output.imbue(std::locale::classic());
+    output << std::scientific << std::setprecision(std::numeric_limits<double>::max_digits10);
   }
 
   void CheckOutput(const std::ostream &output, const char *formatName)
@@ -271,7 +389,16 @@ namespace
 
 const char *gem::io::GetMaterialArrayName(MaterialMappingMethod method)
 {
-  return method == MaterialMappingMethod::MethodA ? MethodAArrayName : MethodBArrayName;
+  switch (method)
+  {
+    case MaterialMappingMethod::MethodA:
+      return MethodAArrayName;
+    case MaterialMappingMethod::MethodB:
+      return MethodBArrayName;
+    case MaterialMappingMethod::MethodE:
+      return MethodEArrayName;
+  }
+  throw std::invalid_argument("Unknown material mapping method.");
 }
 
 bool gem::io::CanExportFemMesh(vtkUnstructuredGrid *grid, std::string *reason)
@@ -286,6 +413,39 @@ bool gem::io::CanExportFemMesh(vtkUnstructuredGrid *grid, std::string *reason)
     catch (const std::invalid_argument &)
     {
       ReadMaterialValues(grid, MaterialMappingMethod::MethodB);
+    }
+    if (reason != nullptr)
+      reason->clear();
+    return true;
+  }
+  catch (const std::invalid_argument &exception)
+  {
+    if (reason != nullptr)
+      *reason = exception.what();
+    return false;
+  }
+}
+
+bool gem::io::CanExportFebioMesh(vtkUnstructuredGrid *grid, std::string *reason)
+{
+  try
+  {
+    ValidateTopology(grid);
+    ValidateFebioOrientation(grid);
+    try
+    {
+      ReadMaterialValues(grid, MaterialMappingMethod::MethodA);
+    }
+    catch (const std::invalid_argument &)
+    {
+      try
+      {
+        ReadMaterialValues(grid, MaterialMappingMethod::MethodB);
+      }
+      catch (const std::invalid_argument &)
+      {
+        ReadMaterialValues(grid, MaterialMappingMethod::MethodE);
+      }
     }
     if (reason != nullptr)
       reason->clear();
@@ -404,4 +564,70 @@ void gem::io::WriteAnsys(std::ostream &output, vtkUnstructuredGrid *grid, const 
          << "CM,GEM_ELEMENTS,ELEM\n"
          << "FINISH\n";
   CheckOutput(output, "ANSYS");
+}
+
+void gem::io::WriteFebio(std::ostream &output, vtkUnstructuredGrid *grid, const FebioExportOptions &options)
+{
+  const PreparedFebioMesh prepared = PrepareFebio(grid, options);
+  const char *const materialArrayName = GetMaterialArrayName(options.materialMappingMethod);
+
+  ConfigureFebioNumericOutput(output);
+
+  output << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+         << "<!-- MITK-GEM FEBio mesh and mapped material; source map=" << materialArrayName
+         << "; units=" << options.unitSystem << "; geometry scale=" << options.geometryScale
+         << "; Young's modulus scale=" << options.youngsModulusScale << " -->\n"
+         << "<febio_spec version=\"4.0\">\n"
+         << "  <Module type=\"solid\">\n"
+         << "    <units>" << options.unitSystem << "</units>\n"
+         << "  </Module>\n";
+
+  output << "  <Material>\n"
+         << "    <material id=\"1\" name=\"MITK_GEM_BONE\" type=\"isotropic elastic\">\n"
+         << "      <E type=\"map\">" << materialArrayName << "</E>\n"
+         << "      <v>" << options.poissonRatio << "</v>\n"
+         << "    </material>\n"
+         << "  </Material>\n"
+         << "  <Mesh>\n"
+         << "    <Nodes name=\"MITK_GEM_NODES\">\n";
+
+  for (vtkIdType pointId = 0; pointId < grid->GetNumberOfPoints(); ++pointId)
+  {
+    double point[3] = {};
+    grid->GetPoint(pointId, point);
+    output << "      <node id=\"" << pointId + 1 << "\">" << point[0] * options.geometryScale << ","
+           << point[1] * options.geometryScale << "," << point[2] * options.geometryScale << "</node>\n";
+  }
+
+  output << "    </Nodes>\n"
+         << "    <Elements type=\"" << (prepared.cellType == VTK_TETRA ? "tet4" : "tet10")
+         << "\" name=\"MITK_GEM_BONE_DOMAIN\">\n";
+  for (vtkIdType cellId = 0; cellId < grid->GetNumberOfCells(); ++cellId)
+  {
+    vtkCell *cell = grid->GetCell(cellId);
+    output << "      <elem id=\"" << cellId + 1 << "\">";
+    for (vtkIdType localPointId = 0; localPointId < prepared.nodesPerElement; ++localPointId)
+    {
+      if (localPointId > 0)
+        output << ",";
+      output << cell->GetPointId(localPointId) + 1;
+    }
+    output << "</elem>\n";
+  }
+
+  output << "    </Elements>\n"
+         << "  </Mesh>\n"
+         << "  <MeshDomains>\n"
+         << "    <SolidDomain name=\"MITK_GEM_BONE_DOMAIN\" mat=\"MITK_GEM_BONE\"/>\n"
+         << "  </MeshDomains>\n"
+         << "  <MeshData>\n"
+         << "    <ElementData name=\"" << materialArrayName << "\" elem_set=\"MITK_GEM_BONE_DOMAIN\">\n";
+  for (vtkIdType cellId = 0; cellId < grid->GetNumberOfCells(); ++cellId)
+    output << "      <e lid=\"" << cellId + 1 << "\">"
+           << prepared.youngsModuli[static_cast<std::size_t>(cellId)] << "</e>\n";
+
+  output << "    </ElementData>\n"
+         << "  </MeshData>\n"
+         << "</febio_spec>\n";
+  CheckOutput(output, "FEBio");
 }

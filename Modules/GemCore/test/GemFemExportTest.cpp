@@ -6,6 +6,7 @@
 
 #include <vtkCellData.h>
 #include <vtkDoubleArray.h>
+#include <vtkPointData.h>
 #include <vtkPoints.h>
 #include <vtkSmartPointer.h>
 #include <vtkUnstructuredGrid.h>
@@ -175,6 +176,25 @@ namespace
     return grid;
   }
 
+  vtkSmartPointer<vtkUnstructuredGrid> CreateInvertedTetraWithMaterial()
+  {
+    vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
+    points->InsertNextPoint(0.0, 0.0, 0.0);
+    points->InsertNextPoint(1.0, 0.0, 0.0);
+    points->InsertNextPoint(0.0, 1.0, 0.0);
+    points->InsertNextPoint(0.0, 0.0, 1.0);
+    vtkIdType pointIds[4] = {0, 2, 1, 3};
+
+    vtkSmartPointer<vtkUnstructuredGrid> grid = vtkSmartPointer<vtkUnstructuredGrid>::New();
+    grid->SetPoints(points);
+    grid->InsertNextCell(VTK_TETRA, 4, pointIds);
+    vtkSmartPointer<vtkDoubleArray> methodA = vtkSmartPointer<vtkDoubleArray>::New();
+    methodA->SetName(gem::io::GetMaterialArrayName(gem::io::MaterialMappingMethod::MethodA));
+    methodA->InsertNextValue(100.0);
+    grid->GetCellData()->AddArray(methodA);
+    return grid;
+  }
+
   template <typename TCallable>
   bool ThrowsInvalidArgument(const TCallable &callable)
   {
@@ -230,8 +250,8 @@ int main(int argc, char *argv[])
 {
   TestContext test;
 
-  test.Check(argc == 6, "The legacy, golden, and service-output paths were provided");
-  if (argc != 6)
+  test.Check(argc == 8, "The legacy, golden, and service-output paths were provided");
+  if (argc != 8)
     return EXIT_FAILURE;
 
   vtkSmartPointer<vtkUnstructuredGrid> grid = ReadLegacyReferenceMesh(argv[1]);
@@ -253,20 +273,41 @@ int main(int argc, char *argv[])
   test.Check(ansys.str() == ReadTextFile(argv[3]),
              "ANSYS output matches the corrected legacy-reference fixture");
 
+  gem::io::FebioExportOptions febioOptions;
+  std::ostringstream febio;
+  gem::io::WriteFebio(febio, grid, febioOptions);
+  test.Check(febio.str() == ReadTextFile(argv[4]),
+             "FEBio output matches the native FEBio 4 material-map fixture");
+  test.Check(Contains(febio.str(), "<E type=\"map\">GEM_METHOD_A</E>"),
+             "FEBio material binds Young's modulus to the selected element map");
+  test.Check(CountOccurrences(febio.str(), "<e lid=") == 3,
+             "FEBio output preserves one continuous modulus value per element");
+
   mitk::UnstructuredGrid::Pointer mitkGrid = mitk::UnstructuredGrid::New();
   mitkGrid->SetVtkUnstructuredGrid(grid);
   mitk::IFileWriter::Options writerOptions;
   writerOptions["Material mapping method"] = std::string("Method A");
   writerOptions["Maximum material definitions"] = 2;
   writerOptions["Poisson's ratio"] = 0.3;
-  mitk::IOUtil::Save(mitkGrid.GetPointer(), argv[4], writerOptions);
   mitk::IOUtil::Save(mitkGrid.GetPointer(), argv[5], writerOptions);
-  test.Check(ReadTextFile(argv[4]) == ReadTextFile(argv[2]),
+  mitk::IOUtil::Save(mitkGrid.GetPointer(), argv[6], writerOptions);
+
+  mitk::IFileWriter::Options febioWriterOptions;
+  febioWriterOptions["Material mapping method"] = std::string("Method A");
+  febioWriterOptions["Poisson's ratio"] = 0.3;
+  febioWriterOptions["FEBio unit system"] = std::string("mm-N-s");
+  febioWriterOptions["FEBio geometry scale"] = 1.0;
+  febioWriterOptions["FEBio Young's modulus scale"] = 1.0;
+  mitk::IOUtil::Save(mitkGrid.GetPointer(), argv[7], febioWriterOptions);
+  test.Check(ReadTextFile(argv[5]) == ReadTextFile(argv[2]),
              "MITK Save As selects the registered Abaqus writer and applies its options");
-  test.Check(ReadTextFile(argv[5]) == ReadTextFile(argv[3]),
+  test.Check(ReadTextFile(argv[6]) == ReadTextFile(argv[3]),
              "MITK Save As selects the registered ANSYS writer and applies its options");
-  std::remove(argv[4]);
+  test.Check(ReadTextFile(argv[7]) == ReadTextFile(argv[4]),
+             "MITK Save As selects the registered FEBio writer and applies its options");
   std::remove(argv[5]);
+  std::remove(argv[6]);
+  std::remove(argv[7]);
 
   std::ostringstream abaqusAgain;
   gem::io::WriteAbaqus(abaqusAgain, grid, options);
@@ -280,6 +321,31 @@ int main(int argc, char *argv[])
              "Method B assigns its minimum element to the first material");
   test.Check(Contains(methodB.str(), "*Elset, elset=GEM_MAT_2\n1, 2\n"),
              "The exact bin midpoint and maximum map to the upper material");
+
+  febioOptions.materialMappingMethod = gem::io::MaterialMappingMethod::MethodB;
+  std::ostringstream febioMethodB;
+  gem::io::WriteFebio(febioMethodB, grid, febioOptions);
+  test.Check(Contains(febioMethodB.str(), "<E type=\"map\">GEM_METHOD_B</E>"),
+             "FEBio selects method B explicitly instead of falling back to method A");
+  test.Check(Contains(febioMethodB.str(), "<ElementData name=\"GEM_METHOD_B\""),
+             "FEBio names the material data field after the selected map");
+  test.Check(Contains(febioMethodB.str(), "<e lid=\"1\">3.00000000000000000e+02</e>") &&
+               Contains(febioMethodB.str(), "<e lid=\"2\">2.00000000000000000e+02</e>") &&
+               Contains(febioMethodB.str(), "<e lid=\"3\">1.00000000000000000e+02</e>"),
+             "FEBio preserves the original method-B values without material binning");
+
+  febioOptions.unitSystem = "SI";
+  febioOptions.geometryScale = 2.0;
+  febioOptions.youngsModulusScale = 0.01;
+  std::ostringstream scaledFebio;
+  gem::io::WriteFebio(scaledFebio, grid, febioOptions);
+  test.Check(Contains(scaledFebio.str(), "<units>SI</units>") &&
+               Contains(scaledFebio.str(), "<node id=\"2\">2.00000000000000000e+00,0.00000000000000000e+00,0.00000000000000000e+00</node>") &&
+               Contains(scaledFebio.str(), "<e lid=\"1\">3.00000000000000000e+00</e>"),
+             "FEBio unit and scale options are applied to the serialized model");
+  febioOptions.unitSystem = "mm-N-s";
+  febioOptions.geometryScale = 1.0;
+  febioOptions.youngsModulusScale = 1.0;
 
   vtkSmartPointer<vtkUnstructuredGrid> sparseLevels = vtkSmartPointer<vtkUnstructuredGrid>::New();
   sparseLevels->DeepCopy(grid);
@@ -310,6 +376,14 @@ int main(int argc, char *argv[])
              "Quadratic VTK tetrahedra map to ANSYS SOLID187");
   test.Check(Contains(quadraticAnsys.str(), "EN,1,1,2,3,4,5,6,7,8\nEMORE,9,10\n"),
              "ANSYS nodes beyond EN's eight-node limit are emitted with EMORE");
+
+  febioOptions.materialMappingMethod = gem::io::MaterialMappingMethod::MethodA;
+  std::ostringstream quadraticFebio;
+  gem::io::WriteFebio(quadraticFebio, quadratic, febioOptions);
+  test.Check(Contains(quadraticFebio.str(),
+                      "<Elements type=\"tet10\" name=\"MITK_GEM_BONE_DOMAIN\">\n"
+                      "      <elem id=\"1\">1,2,3,4,5,6,7,8,9,10</elem>\n"),
+             "Quadratic VTK tetrahedra map to FEBio tet10 without reordering");
 
   vtkSmartPointer<vtkUnstructuredGrid> invalidMaterial = vtkSmartPointer<vtkUnstructuredGrid>::New();
   invalidMaterial->DeepCopy(grid);
@@ -345,6 +419,47 @@ int main(int argc, char *argv[])
     }),
     "The exporter rejects a missing explicitly selected method instead of silently switching methods");
 
+  vtkSmartPointer<vtkUnstructuredGrid> methodEOnly = vtkSmartPointer<vtkUnstructuredGrid>::New();
+  methodEOnly->DeepCopy(grid);
+  vtkDataArray *methodEReference = methodEOnly->GetCellData()->GetArray(
+    gem::io::GetMaterialArrayName(gem::io::MaterialMappingMethod::MethodA));
+  vtkSmartPointer<vtkDoubleArray> methodEArray = vtkSmartPointer<vtkDoubleArray>::New();
+  methodEArray->SetName(gem::io::GetMaterialArrayName(gem::io::MaterialMappingMethod::MethodE));
+  for (vtkIdType cellId = 0; cellId < methodEOnly->GetNumberOfCells(); ++cellId)
+    methodEArray->InsertNextValue(methodEReference->GetComponent(cellId, 0));
+  methodEOnly->GetCellData()->RemoveArray(gem::io::GetMaterialArrayName(gem::io::MaterialMappingMethod::MethodA));
+  methodEOnly->GetCellData()->RemoveArray(gem::io::GetMaterialArrayName(gem::io::MaterialMappingMethod::MethodB));
+  methodEOnly->GetCellData()->AddArray(methodEArray);
+  test.Check(!gem::io::CanExportFemMesh(methodEOnly, &reason),
+             "Method E alone does not change the legacy Abaqus and ANSYS eligibility contract");
+  test.Check(gem::io::CanExportFebioMesh(methodEOnly, &reason),
+             "Method E alone is eligible for FEBio's element-wise material map");
+  febioOptions.materialMappingMethod = gem::io::MaterialMappingMethod::MethodE;
+  std::ostringstream febioMethodE;
+  gem::io::WriteFebio(febioMethodE, methodEOnly, febioOptions);
+  test.Check(Contains(febioMethodE.str(), "<E type=\"map\">GEM_METHOD_E</E>"),
+             "FEBio exports the explicitly selected method-E element map");
+  options.materialMappingMethod = gem::io::MaterialMappingMethod::MethodE;
+  test.Check(
+    ThrowsInvalidArgument([&]() {
+      std::ostringstream output;
+      gem::io::WriteAbaqus(output, methodEOnly, options);
+    }),
+    "Method E remains unavailable to the legacy material-card exporters");
+  options.materialMappingMethod = gem::io::MaterialMappingMethod::MethodA;
+
+  vtkSmartPointer<vtkUnstructuredGrid> nodalOnly = vtkSmartPointer<vtkUnstructuredGrid>::New();
+  nodalOnly->DeepCopy(grid);
+  nodalOnly->GetCellData()->RemoveArray(gem::io::GetMaterialArrayName(gem::io::MaterialMappingMethod::MethodA));
+  nodalOnly->GetCellData()->RemoveArray(gem::io::GetMaterialArrayName(gem::io::MaterialMappingMethod::MethodB));
+  vtkSmartPointer<vtkDoubleArray> methodCArray = vtkSmartPointer<vtkDoubleArray>::New();
+  methodCArray->SetName("GEM_METHOD_C");
+  methodCArray->SetNumberOfValues(nodalOnly->GetNumberOfPoints());
+  methodCArray->FillValue(100.0);
+  nodalOnly->GetPointData()->AddArray(methodCArray);
+  test.Check(!gem::io::CanExportFebioMesh(nodalOnly, &reason),
+             "Nodal material maps are not misrepresented as FEBio element data");
+
   vtkSmartPointer<vtkUnstructuredGrid> triangle = CreateTriangleWithMaterial();
   test.Check(!gem::io::CanExportFemMesh(triangle, &reason), "Surface triangles are rejected as FEM volume meshes");
 
@@ -353,6 +468,17 @@ int main(int argc, char *argv[])
   zeroVolume->GetPoints()->SetPoint(3, 1.0, 1.0, 0.0);
   test.Check(!gem::io::CanExportFemMesh(zeroVolume, &reason),
              "A tetrahedron with four coplanar corner nodes is rejected");
+
+  vtkSmartPointer<vtkUnstructuredGrid> inverted = CreateInvertedTetraWithMaterial();
+  test.Check(!gem::io::CanExportFebioMesh(inverted, &reason),
+             "FEBio export rejects tetrahedra with inverted orientation");
+  febioOptions.materialMappingMethod = gem::io::MaterialMappingMethod::MethodA;
+  test.Check(
+    ThrowsInvalidArgument([&]() {
+      std::ostringstream output;
+      gem::io::WriteFebio(output, inverted, febioOptions);
+    }),
+    "FEBio rejects inverted tetrahedra before writing XML");
 
   options.maxMaterialDefinitions = 0;
   test.Check(
@@ -370,6 +496,33 @@ int main(int argc, char *argv[])
       gem::io::WriteAnsys(output, grid, options);
     }),
     "An incompressible-limit Poisson ratio is rejected");
+
+  febioOptions.materialMappingMethod = gem::io::MaterialMappingMethod::MethodA;
+  febioOptions.geometryScale = 0.0;
+  test.Check(
+    ThrowsInvalidArgument([&]() {
+      std::ostringstream output;
+      gem::io::WriteFebio(output, grid, febioOptions);
+    }),
+    "A non-positive FEBio geometry scale is rejected");
+
+  febioOptions.geometryScale = 1.0;
+  febioOptions.youngsModulusScale = 0.0;
+  test.Check(
+    ThrowsInvalidArgument([&]() {
+      std::ostringstream output;
+      gem::io::WriteFebio(output, grid, febioOptions);
+    }),
+    "A non-positive FEBio Young's modulus scale is rejected");
+
+  febioOptions.youngsModulusScale = 1.0;
+  febioOptions.unitSystem = "unsupported-unit-system";
+  test.Check(
+    ThrowsInvalidArgument([&]() {
+      std::ostringstream output;
+      gem::io::WriteFebio(output, grid, febioOptions);
+    }),
+    "An unsupported FEBio unit system is rejected");
 
   return test.Result();
 }

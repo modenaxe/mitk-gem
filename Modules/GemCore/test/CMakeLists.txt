@@ -8,8 +8,10 @@ add_test(
     "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/legacy-material-mapped-mesh.txt"
     "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/abaqus-method-a.inp"
     "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ansys-method-a.cdb"
+    "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/febio-method-a.feb"
     "${CMAKE_CURRENT_BINARY_DIR}/GemFemExport-service.inp"
     "${CMAKE_CURRENT_BINARY_DIR}/GemFemExport-service.cdb"
+    "${CMAKE_CURRENT_BINARY_DIR}/GemFemExport-service.feb"
 )
 
 if(WIN32)

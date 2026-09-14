@@ -6,6 +6,7 @@
 #include <AbaqusFileWriterService.h>
 #include <AnsysFileWriterService.h>
 #include <AsciiUgridFileWriterService.h>
+#include <FebioFileWriterService.h>
 
 namespace mitk {
     class NewModuleIOActivator : public us::ModuleActivator {
@@ -27,6 +28,7 @@ namespace mitk {
 
             m_spAnsysFileWriterInstance = std::unique_ptr<AnsysFileWriterService>(new AnsysFileWriterService());
             m_spAbaqusFileWriterInstance = std::unique_ptr<AbaqusFileWriterService>(new AbaqusFileWriterService());
+            m_spFebioFileWriterInstance = std::unique_ptr<FebioFileWriterService>(new FebioFileWriterService());
             m_spAsciiUgridFileWriterInstance = std::unique_ptr<AsciiUgridFileWriterService>(new AsciiUgridFileWriterService());
         }
 
@@ -37,12 +39,14 @@ namespace mitk {
 
             m_spAnsysFileWriterInstance.reset();
             m_spAbaqusFileWriterInstance.reset();
+            m_spFebioFileWriterInstance.reset();
             m_spAsciiUgridFileWriterInstance.reset();
         }
 
     private:
         std::unique_ptr <AnsysFileWriterService> m_spAnsysFileWriterInstance;
         std::unique_ptr <AbaqusFileWriterService> m_spAbaqusFileWriterInstance;
+        std::unique_ptr <FebioFileWriterService> m_spFebioFileWriterInstance;
         std::unique_ptr <AsciiUgridFileWriterService> m_spAsciiUgridFileWriterInstance;
 
         std::vector<mitk::CustomMimeType *> m_MimeTypes;

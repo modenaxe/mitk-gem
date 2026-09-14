@@ -8,6 +8,7 @@ std::vector<mitk::CustomMimeType *> GemIOMimeTypes::Get() {
     // order matters here (descending rank for mime types)
 	mimeTypes.push_back(ANSYS_MIMETYPE().Clone());
 	mimeTypes.push_back(ABAQUS_MIMETYPE().Clone());
+	mimeTypes.push_back(FEBIO_MIMETYPE().Clone());
 	mimeTypes.push_back(ASCIIUGRID_MIMETYPE().Clone());
 
     return mimeTypes;
@@ -58,5 +59,21 @@ mitk::CustomMimeType GemIOMimeTypes::ABAQUS_MIMETYPE(void)
 std::string GemIOMimeTypes::ABAQUS_MIMETYPE_NAME()
 {
     static std::string name(mitk::IOMimeTypes::DEFAULT_BASE_NAME() + ".gem.ugridabaqus");
+    return name;
+}
+
+mitk::CustomMimeType GemIOMimeTypes::FEBIO_MIMETYPE(void)
+{
+    static std::string name(FEBIO_MIMETYPE_NAME());
+    mitk::CustomMimeType mimeType(name);
+    mimeType.SetComment("FEBio model with material-mapped tetrahedral mesh");
+    mimeType.SetCategory("GEM Unstructured Grid");
+    mimeType.AddExtension("feb");
+    return mimeType;
+}
+
+std::string GemIOMimeTypes::FEBIO_MIMETYPE_NAME()
+{
+    static std::string name(mitk::IOMimeTypes::DEFAULT_BASE_NAME() + ".gem.ugridfebio");
     return name;
 }
