@@ -306,6 +306,59 @@ jobs:
             -DMITK_BUILD_TESTING:BOOL=OFF \
             -DMITK_USE_Python3:BOOL=OFF
 
+      - name: Verify Windows runtime configuration
+        if: matrix.id == 'windows'
+        shell: pwsh
+        run: |
+          $expectedRuntime = 'MultiThreaded$<$<CONFIG:Debug>:Debug>DLL'
+          $outerCache = Get-Content -LiteralPath 'b\CMakeCache.txt'
+          $runtimeEntry = $outerCache | Where-Object { $_ -like 'CMAKE_MSVC_RUNTIME_LIBRARY:STRING=*' }
+          if ($runtimeEntry.Count -ne 1) {
+            throw "Expected one CMAKE_MSVC_RUNTIME_LIBRARY entry, found $($runtimeEntry.Count)."
+          }
+          $configuredRuntime = $runtimeEntry -replace '^CMAKE_MSVC_RUNTIME_LIBRARY:STRING=', ''
+          if ($configuredRuntime -ne $expectedRuntime) {
+            throw "Expected dynamic MSVC runtime '$expectedRuntime', found '$configuredRuntime'."
+          }
+
+          $mitkConfigureCommand = Get-Content -LiteralPath 'b\MITK-cmake\tmp\MITK-cfgcmd.txt' -Raw
+          $expectedArgument = "-DCMAKE_MSVC_RUNTIME_LIBRARY:STRING=$expectedRuntime"
+          if (-not $mitkConfigureCommand.Contains($expectedArgument)) {
+            throw "The generated MITK configure command does not forward '$expectedArgument'."
+          }
+
+          cmake "-DMITK_SOURCE_DIR:PATH=$env:MITK_SOURCE_DIR" `
+            -P 'CMake\ApplyMITK2025CMake4Compat.cmake'
+          if ($LASTEXITCODE -ne 0) {
+            throw "The MITK compatibility patch failed with exit code $LASTEXITCODE."
+          }
+
+          $mitkCMakeLists = Get-Content -LiteralPath "$env:MITK_SOURCE_DIR\CMakeLists.txt" -Raw
+          $mitkSuperbuild = Get-Content -LiteralPath "$env:MITK_SOURCE_DIR\SuperBuild.cmake" -Raw
+          if (-not $mitkCMakeLists.Contains('cmake_policy(SET CMP0091 NEW)')) {
+            throw 'MITK still uses the legacy CMP0091 runtime policy.'
+          }
+          if (-not $mitkSuperbuild.Contains('-DCMAKE_POLICY_DEFAULT_CMP0091:STRING=NEW')) {
+            throw 'MITK does not apply the modern runtime policy to external projects.'
+          }
+          if (-not $mitkSuperbuild.Contains('-DCMAKE_MSVC_RUNTIME_LIBRARY:STRING=${CMAKE_MSVC_RUNTIME_LIBRARY}')) {
+            throw 'MITK does not forward CMAKE_MSVC_RUNTIME_LIBRARY to external projects.'
+          }
+
+          $dependencyRuntimePins = @{
+            'ITK.cmake' = '-DITK_MSVC_STATIC_RUNTIME_LIBRARY:BOOL=OFF'
+            'HDF5.cmake' = '-DBUILD_STATIC_CRT_LIBS:BOOL=OFF'
+            'Poco.cmake' = '-DPOCO_MT:BOOL=OFF'
+            'DCMTK.cmake' = '-DDCMTK_COMPILE_WIN32_MULTITHREADED_DLL:BOOL=ON'
+          }
+          foreach ($recipe in $dependencyRuntimePins.GetEnumerator()) {
+            $recipePath = Join-Path $env:MITK_SOURCE_DIR "CMakeExternals\$($recipe.Key)"
+            $recipeContents = Get-Content -LiteralPath $recipePath -Raw
+            if (-not $recipeContents.Contains($recipe.Value)) {
+              throw "$($recipe.Key) does not pin the expected runtime option '$($recipe.Value)'."
+            }
+          }
+
       - name: Build and package MITK-GEM (Windows)
         if: matrix.id == 'windows'
         shell: pwsh

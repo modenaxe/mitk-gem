@@ -146,6 +146,68 @@ else()
   message(STATUS "MITK v2025.12.2 dynamic MSVC-runtime propagation patch is already applied")
 endif()
 
+# A few MITK dependencies have project-specific switches which override the
+# common CMake runtime setting. Pin their dynamic-runtime modes explicitly so
+# a changed upstream default or a reused cache cannot reintroduce /MT.
+function(mitk_gem_pin_dynamic_msvc_runtime recipe_name argument_list anchor runtime_argument)
+  set(recipe_file "${MITK_SOURCE_DIR}/CMakeExternals/${recipe_name}")
+  if(NOT EXISTS "${recipe_file}")
+    message(FATAL_ERROR "MITK external-project recipe was not found: ${recipe_file}")
+  endif()
+
+  file(READ "${recipe_file}" recipe_contents)
+  string(FIND "${recipe_contents}" "\r\n" recipe_uses_crlf)
+  string(REPLACE "\r\n" "\n" recipe_normalized_contents "${recipe_contents}")
+  string(CONCAT runtime_block
+    "${anchor}\n\n"
+    "    if(MSVC)\n"
+    "      list(APPEND ${argument_list}\n"
+    "        ${runtime_argument}\n"
+    "      )\n"
+    "    endif()")
+
+  string(FIND "${recipe_normalized_contents}" "${runtime_block}" runtime_already_pinned)
+  if(runtime_already_pinned EQUAL -1)
+    string(FIND "${recipe_normalized_contents}" "${anchor}" runtime_anchor_location)
+    if(runtime_anchor_location EQUAL -1)
+      message(FATAL_ERROR
+        "The expected MITK v2025.12.2 ${recipe_name} context was not found; refusing to patch an unknown source revision")
+    endif()
+
+    string(REPLACE "${anchor}" "${runtime_block}" recipe_normalized_contents "${recipe_normalized_contents}")
+    if(NOT recipe_uses_crlf EQUAL -1)
+      string(REPLACE "\n" "\r\n" recipe_contents "${recipe_normalized_contents}")
+    else()
+      set(recipe_contents "${recipe_normalized_contents}")
+    endif()
+    file(WRITE "${recipe_file}" "${recipe_contents}")
+    message(STATUS "Pinned the dynamic MSVC runtime in MITK's ${recipe_name} recipe")
+  else()
+    message(STATUS "MITK's ${recipe_name} dynamic MSVC runtime is already pinned")
+  endif()
+endfunction()
+
+mitk_gem_pin_dynamic_msvc_runtime(
+  "ITK.cmake"
+  "additional_cmake_args"
+  "  set(additional_cmake_args -DUSE_WRAP_ITK:BOOL=OFF)"
+  "-DITK_MSVC_STATIC_RUNTIME_LIBRARY:BOOL=OFF")
+mitk_gem_pin_dynamic_msvc_runtime(
+  "HDF5.cmake"
+  "additional_args"
+  "    set(additional_args )"
+  "-DBUILD_STATIC_CRT_LIBS:BOOL=OFF")
+mitk_gem_pin_dynamic_msvc_runtime(
+  "Poco.cmake"
+  "additional_cmake_args"
+  "    set(additional_cmake_args )"
+  "-DPOCO_MT:BOOL=OFF")
+mitk_gem_pin_dynamic_msvc_runtime(
+  "DCMTK.cmake"
+  "additional_args"
+  "    set(additional_args )"
+  "-DDCMTK_COMPILE_WIN32_MULTITHREADED_DLL:BOOL=ON")
+
 # GDCM 3.0.14's embedded socket++ library exports C++ standard-library
 # members when built as a DLL with current MSVC. Building GDCM's internals
 # statically avoids the resulting duplicate-symbol linker errors.
