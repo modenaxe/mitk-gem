@@ -32,12 +32,18 @@ See LICENSE.txt or http://www.mitk.org for details.
 #include <QmitkUGCombinedRepresentationPropertyWidget.h>
 #include <QmitkBoolPropertyWidget.h>
 #include <QMessageBox>
+#include <QSignalBlocker>
 #include <QWidgetAction>
 
 #include <WorkbenchUtils.h>
+#include <vtkDataArray.h>
+#include <vtkDataSetAttributes.h>
 #include <vtkCellData.h>
+#include <vtkMapper.h>
 #include <vtkPointData.h>
 #include <vtkUnstructuredGrid.h>
+
+#include <cmath>
 
 class UGVisVolumeObserver : public mitk::PropertyView {
 public:
@@ -186,6 +192,10 @@ void UGVisualizationView::OnSelectionChanged(berry::IWorkbenchPart::Pointer,
 }
 
 void UGVisualizationView::RenderingCheckboxClicked(bool) {
+    if(m_SelectedNode.IsNull()){
+        return;
+    }
+
     bool hasMapper = m_SelectedNode->GetMapper(mitk::BaseRenderer::Standard3D);
     bool isChecked = m_Controls.renderingCheckbox->isChecked();
     if(isChecked && !hasMapper){
@@ -194,20 +204,33 @@ void UGVisualizationView::RenderingCheckboxClicked(bool) {
         m_SelectedNode->SetProperty("grid representation", mitk::GridRepresentationProperty::New(2));
 
         auto renderer = mitk::BaseRenderer::GetInstance(mitk::BaseRenderer::GetRenderWindowByName("stdmulti.widget4"));
-        m_SelectedNode->SetProperty("scalar mode", mitk::VtkScalarModeProperty::New(4), renderer);
         m_SelectedNode->SetProperty("outline polygons", mitk::BoolProperty::New(true));
         m_SelectedNode->AddProperty("material.specularCoefficient", mitk::FloatProperty::New(0.0), renderer, true);
-
-        FieldDataSelectionChanged(1);
     } else if(!isChecked && hasMapper){
         m_SelectedNode->SetMapper(mitk::BaseRenderer::Standard2D, nullptr);
         m_SelectedNode->SetMapper(mitk::BaseRenderer::Standard3D, nullptr);
     }
     UpdateGUI();
+
+    if(isChecked && IsRenderable(m_SelectedNode)){
+        FieldDataSelectionChanged(m_Controls.fieldDataComboBox->currentIndex());
+    } else {
+        UpdateRenderWindow();
+    }
 }
 
 void UGVisualizationView::ScalarModeSelectionChanged(int) {
-    UpdateGUI();
+    if(m_SelectedNode.IsNull()){
+        return;
+    }
+
+    auto ugrid = dynamic_cast<mitk::UnstructuredGrid *>(m_SelectedNode->GetData());
+    if(!ugrid){
+        return;
+    }
+
+    UpdateFieldDataComboBoxes(ugrid);
+    FieldDataSelectionChanged(m_Controls.fieldDataComboBox->currentIndex());
 }
 
 void UGVisualizationView::UpdateFieldDataComboBoxes(mitk::UnstructuredGrid::Pointer _ugrid) {
@@ -222,16 +245,25 @@ void UGVisualizationView::UpdateFieldDataComboBoxes(mitk::UnstructuredGrid::Poin
 }
 
 void UGVisualizationView::SetFieldDataComboBoxEntries(vtkFieldData *_data) {
+    QSignalBlocker blockSignals(m_Controls.fieldDataComboBox);
+    const auto previouslySelectedName = m_Controls.fieldDataComboBox->currentText();
     m_Controls.fieldDataComboBox->clear();
+
+    if(!_data){
+        return;
+    }
 
     vtkFieldData::Iterator it(_data);
     vtkDataArray *data;
     for(data = it.Begin(); !it.End(); data=it.Next()){
-        if(data){
+        if(data && data->GetNumberOfComponents() == 1 && data->GetName()){
             auto name = data->GetName();
             m_Controls.fieldDataComboBox->addItem(name);
         }
     }
+
+    const auto previousIndex = m_Controls.fieldDataComboBox->findText(previouslySelectedName);
+    m_Controls.fieldDataComboBox->setCurrentIndex(previousIndex >= 0 ? previousIndex : 0);
 }
 
 void UGVisualizationView::FieldDataSelectionChanged(int) {
@@ -246,7 +278,7 @@ void UGVisualizationView::FieldDataSelectionChanged(int) {
 
 bool UGVisualizationView::IsRenderable(mitk::DataNode::Pointer _node) {
     if(_node){
-        bool hasMapper = m_SelectedNode->GetMapper(mitk::BaseRenderer::Standard3D);
+        bool hasMapper = _node->GetMapper(mitk::BaseRenderer::Standard3D);
         bool isChecked = m_Controls.renderingCheckbox->isChecked();
         return hasMapper && isChecked;
     }
@@ -254,44 +286,74 @@ bool UGVisualizationView::IsRenderable(mitk::DataNode::Pointer _node) {
 }
 
 void UGVisualizationView::ActivateFieldData(mitk::DataNode::Pointer _node, QString _name) {
-    vtkActor *actor = WorkbenchUtils::getVtk3dActor(_node);
-    auto ugrid = dynamic_cast<mitk::UnstructuredGrid *>(_node->GetData());
-    auto name = _name.toStdString(); // was _name.toStdString().c_str(). But calling c_str() on a rvalue will leave a dangling pointer resulting in undefined behavior.
+    if(_node.IsNull()){
+        return;
+    }
 
-    vtkFieldData *fieldData;
-    vtkDataArray *data;
+    auto ugrid = dynamic_cast<mitk::UnstructuredGrid *>(_node->GetData());
+    if(!ugrid){
+        return;
+    }
+
+    const auto name = _name.toStdString();
+
+    vtkDataSetAttributes *fieldData = nullptr;
+    mitk::VtkScalarModeProperty::Pointer scalarMode = mitk::VtkScalarModeProperty::New();
+    bool usePointData = false;
     switch(m_Controls.scalarModeComboBox->currentIndex()){
         case 0:
-            actor->GetMapper()->SetScalarModeToUsePointFieldData();
             fieldData = ugrid->GetVtkUnstructuredGrid()->GetPointData();
-            data = fieldData->GetArray(name.c_str());
+            scalarMode->SetScalarModeToPointData();
+            usePointData = true;
             break;
         case 1:
-            actor->GetMapper()->SetScalarModeToUseCellFieldData();
             fieldData = ugrid->GetVtkUnstructuredGrid()->GetCellData();
-            data = fieldData->GetArray(name.c_str());
+            scalarMode->SetScalarModeToCellData();
             break;
         default:
             QMessageBox::warning(NULL, "Error", "Invalid scalar mode selection.");
             return;
     }
 
-    if(data){
-        double min = std::numeric_limits<double>::max();
-        double max = std::numeric_limits<double>::min();
-        vtkFieldData::Iterator it(fieldData);
-        vtkDataArray *array;
-        for(array = it.Begin(); !it.End(); array=it.Next()){
-            if(data){
-                auto range = array->GetRange();
-                min = std::min(min, range[0]);
-                max = std::max(max, range[1]);
-            }
-        }
+    auto *data = fieldData ? fieldData->GetArray(name.c_str()) : nullptr;
+    if(!data){
+        QMessageBox::warning(NULL, "Error", "The selected scalar array is no longer available on this mesh.");
+        return;
+    }
 
-        _node->SetProperty("TransferFunction", WorkbenchUtils::createColorTransferFunction(min, max));
-        // actor->GetMapper()->ClearColorArrays();
-        actor->GetMapper()->Modified();
+    const double *range = data->GetRange();
+    if(!range || !std::isfinite(range[0]) || !std::isfinite(range[1])){
+        QMessageBox::warning(NULL, "Error", "The selected scalar array has no finite value range.");
+        return;
+    }
+
+    // The section mapper consumes VTK's active scalar array, while the 3D
+    // mapper can use it through the normal point/cell scalar modes. Keeping
+    // both on the same active array prevents a 2D view from silently falling
+    // back to an unrelated cell array.
+    if(fieldData->SetActiveScalars(name.c_str()) < 0){
+        QMessageBox::warning(NULL, "Error", "The selected array cannot be used as active scalar data.");
+        return;
+    }
+
+    _node->SetProperty("scalar mode", scalarMode);
+    _node->SetProperty("scalar visibility", mitk::BoolProperty::New(true));
+    _node->SetProperty("TransferFunction", WorkbenchUtils::createColorTransferFunction(range[0], range[1]));
+    ugrid->GetVtkUnstructuredGrid()->Modified();
+    ugrid->Modified();
+
+    // Apply the same association immediately when an actor already exists.
+    // The node properties above remain the source of truth for subsequently
+    // created 3D actors and all 2D renderers.
+    vtkActor *actor = WorkbenchUtils::getVtk3dActor(_node);
+    if(actor && actor->GetMapper()){
+        if(usePointData){
+            actor->GetMapper()->SetScalarModeToUsePointData();
+        } else {
+            actor->GetMapper()->SetScalarModeToUseCellData();
+        }
+        actor->GetMapper()->SetScalarVisibility(true);
         actor->GetMapper()->SelectColorArray(name.c_str());
+        actor->GetMapper()->Modified();
     }
 }

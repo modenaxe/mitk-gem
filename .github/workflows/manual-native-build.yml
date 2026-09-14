@@ -349,6 +349,7 @@ jobs:
 
           $mitkCMakeLists = Get-Content -LiteralPath "$env:MITK_SOURCE_DIR\CMakeLists.txt" -Raw
           $mitkSuperbuild = Get-Content -LiteralPath "$env:MITK_SOURCE_DIR\SuperBuild.cmake" -Raw
+          $mitkUGridMapper2D = Get-Content -LiteralPath "$env:MITK_SOURCE_DIR\Modules\MapperExt\src\mitkUnstructuredGridMapper2D.cpp" -Raw
           if (-not $mitkCMakeLists.Contains('cmake_policy(SET CMP0091 NEW)')) {
             throw 'MITK still uses the legacy CMP0091 runtime policy.'
           }
@@ -357,6 +358,9 @@ jobs:
           }
           if (-not $mitkSuperbuild.Contains('-DCMAKE_MSVC_RUNTIME_LIBRARY:STRING=${CMAKE_MSVC_RUNTIME_LIBRARY}')) {
             throw 'MITK does not forward CMAKE_MSVC_RUNTIME_LIBRARY to external projects.'
+          }
+          if (-not $mitkUGridMapper2D.Contains('// MITK-GEM patch: correctly colour UGrid sections from active point or cell scalars.')) {
+            throw 'MITK does not contain the required UGrid 2D section-rendering patch.'
           }
 
           $dependencyRuntimePins = @{

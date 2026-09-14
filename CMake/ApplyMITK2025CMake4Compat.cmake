@@ -378,3 +378,341 @@ if(mitk_tinyxml2_recipe_already_patched EQUAL -1)
 else()
   message(STATUS "MITK v2025.12.2 tinyxml2 CMake 4 recipe patch is already applied")
 endif()
+
+# MITK's legacy UnstructuredGridMapper2D distinguishes only the classic
+# point/cell scalar modes. MITK-GEM selects named field-data arrays in the
+# UGrid view, so the 3D VTK actor could show a map while the 2D section mapper
+# either used an unrelated active cell array or drew no filled section at all.
+# Make the mapper honour both associations and interpolate active point scalars
+# across section polygons. This is intentionally kept as a source patch: the
+# mapper is part of the pinned MITK build, not MITK-GEM's plug-in binary.
+set(mitk_ugrid_mapper2d_file
+  "${MITK_SOURCE_DIR}/Modules/MapperExt/src/mitkUnstructuredGridMapper2D.cpp")
+if(NOT EXISTS "${mitk_ugrid_mapper2d_file}")
+  message(FATAL_ERROR "MITK UnstructuredGridMapper2D source was not found: ${mitk_ugrid_mapper2d_file}")
+endif()
+
+file(READ "${mitk_ugrid_mapper2d_file}" mitk_ugrid_mapper2d_contents)
+string(FIND "${mitk_ugrid_mapper2d_contents}" "\r\n" mitk_ugrid_mapper2d_uses_crlf)
+string(REPLACE "\r\n" "\n" mitk_ugrid_mapper2d_normalized_contents "${mitk_ugrid_mapper2d_contents}")
+
+set(mitk_ugrid_section_patch_marker
+  "// MITK-GEM patch: correctly colour UGrid sections from active point or cell scalars.")
+string(FIND "${mitk_ugrid_mapper2d_normalized_contents}"
+  "${mitk_ugrid_section_patch_marker}" mitk_ugrid_section_patch_already_applied)
+
+if(mitk_ugrid_section_patch_already_applied EQUAL -1)
+  set(mitk_ugrid_section_original [=[  const bool useCellData = m_ScalarMode->GetVtkScalarMode() == VTK_SCALAR_MODE_DEFAULT ||
+                           m_ScalarMode->GetVtkScalarMode() == VTK_SCALAR_MODE_USE_CELL_DATA;
+  const bool usePointData = m_ScalarMode->GetVtkScalarMode() == VTK_SCALAR_MODE_USE_POINT_DATA;
+
+  Point3D p;
+  Point2D p2d;
+
+  vlines->InitTraversal();
+  vpolys->InitTraversal();
+
+  mitk::Color outlineColor = m_Color->GetColor();
+
+  glLineWidth((float)m_LineWidth->GetValue());
+
+  for (int i = 0; i < numberOfLines; ++i)
+  {
+    const vtkIdType *cell(nullptr);
+    vtkIdType cellSize(0);
+
+    vlines->GetNextCell(cellSize, cell);
+
+    float rgba[4] = {outlineColor[0], outlineColor[1], outlineColor[2], 1.0f};
+    if (m_ScalarVisibility->GetValue() && vcellscalars)
+    {
+      if (useCellData)
+      { // color each cell according to cell data
+        double scalar = vcellscalars->GetComponent(i, 0);
+        double rgb[3] = {1.0f, 1.0f, 1.0f};
+        m_ScalarsToColors->GetColor(scalar, rgb);
+        rgba[0] = (float)rgb[0];
+        rgba[1] = (float)rgb[1];
+        rgba[2] = (float)rgb[2];
+        rgba[3] = (float)m_ScalarsToOpacity->GetValue(scalar);
+      }
+      else if (usePointData)
+      {
+        double scalar = vscalars->GetComponent(i, 0);
+        double rgb[3] = {1.0f, 1.0f, 1.0f};
+        m_ScalarsToColors->GetColor(scalar, rgb);
+        rgba[0] = (float)rgb[0];
+        rgba[1] = (float)rgb[1];
+        rgba[2] = (float)rgb[2];
+        rgba[3] = (float)m_ScalarsToOpacity->GetValue(scalar);
+      }
+    }
+
+    glColor4fv(rgba);
+
+    glBegin(GL_LINE_LOOP);
+    for (int j = 0; j < cellSize; ++j)
+    {
+      vpoints->GetPoint(cell[j], vp);
+      // take transformation via vtktransform into account
+      vtktransform->TransformPoint(vp, vp);
+
+      vtk2itk(vp, p);
+
+      // convert 3D point (in mm) to display coordinates (units )
+      renderer->WorldToDisplay(p, p2d);
+
+      // convert display coordinates ( (0,0) is top-left ) in GL coordinates ( (0,0) is bottom-left )
+      // p2d[1]=toGL-p2d[1];
+
+      // add the current vertex to the line
+      glVertex2f(p2d[0], p2d[1]);
+    }
+    glEnd();
+  }
+
+  bool polyOutline = m_Outline->GetValue();
+  bool scalarVisibility = m_ScalarVisibility->GetValue();
+
+  // cache the transformed points
+  // a fixed size array is way faster than 'new'
+  // slices through 3d cells usually do not generated
+  // polygons with more than 6 vertices
+  const int maxPolySize = 10;
+  auto *cachedPoints = new Point2D[maxPolySize * numberOfPolys];
+
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+  // only draw polygons if there are cell scalars
+  // or the outline property is set to true
+  if (scalarVisibility && vcellscalars)
+  {
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+    for (int i = 0; i < numberOfPolys; ++i)
+    {
+      const vtkIdType *cell(nullptr);
+      vtkIdType cellSize(0);
+
+      vpolys->GetNextCell(cellSize, cell);
+
+      float rgba[4] = {1.0f, 1.0f, 1.0f, 0};
+      if (scalarVisibility && vcellscalars)
+      {
+        if (useCellData)
+        { // color each cell according to cell data
+          double scalar = vcellscalars->GetComponent(i + numberOfLines, 0);
+          double rgb[3] = {1.0f, 1.0f, 1.0f};
+          m_ScalarsToColors->GetColor(scalar, rgb);
+          rgba[0] = (float)rgb[0];
+          rgba[1] = (float)rgb[1];
+          rgba[2] = (float)rgb[2];
+          rgba[3] = (float)m_ScalarsToOpacity->GetValue(scalar);
+        }
+        else if (usePointData)
+        {
+          double scalar = vscalars->GetComponent(i, 0);
+          double rgb[3] = {1.0f, 1.0f, 1.0f};
+          m_ScalarsToColors->GetColor(scalar, rgb);
+          rgba[0] = (float)rgb[0];
+          rgba[1] = (float)rgb[1];
+          rgba[2] = (float)rgb[2];
+          rgba[3] = (float)m_ScalarsToOpacity->GetValue(scalar);
+        }
+      }
+      glColor4fv(rgba);
+
+      glBegin(GL_POLYGON);
+      for (int j = 0; j < cellSize; ++j)
+      {
+        vpoints->GetPoint(cell[j], vp);
+        // take transformation via vtktransform into account
+        vtktransform->TransformPoint(vp, vp);
+
+        vtk2itk(vp, p);
+
+        // convert 3D point (in mm) to display coordinates (units )
+        renderer->WorldToDisplay(p, p2d);
+
+        // convert display coordinates ( (0,0) is top-left ) in GL coordinates ( (0,0) is bottom-left )
+        // p2d[1]=toGL-p2d[1];
+
+        cachedPoints[i * 10 + j][0] = p2d[0];
+        cachedPoints[i * 10 + j][1] = p2d[1];
+
+        // add the current vertex to the line
+        glVertex2f(p2d[0], p2d[1]);
+      }
+      glEnd();
+    }
+
+    if (polyOutline)
+    {
+      vpolys->InitTraversal();
+
+      glColor4f(outlineColor[0], outlineColor[1], outlineColor[2], 1.0f);
+      glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+      for (int i = 0; i < numberOfPolys; ++i)
+      {
+        const vtkIdType *cell(nullptr);
+        vtkIdType cellSize(0);
+
+        vpolys->GetNextCell(cellSize, cell);
+
+        glBegin(GL_POLYGON);
+        // glPolygonOffset(1.0, 1.0);
+        for (int j = 0; j < cellSize; ++j)
+        {
+          // add the current vertex to the line
+          glVertex2f(cachedPoints[i * 10 + j][0], cachedPoints[i * 10 + j][1]);
+        }
+        glEnd();
+      }
+    }
+  }
+  glDisable(GL_BLEND);
+  delete[] cachedPoints;
+]=])
+
+  set(mitk_ugrid_section_patched [=[  const int scalarMode = m_ScalarMode->GetVtkScalarMode();
+  // MITK-GEM patch: correctly colour UGrid sections from active point or cell scalars.
+  const bool useCellData = scalarMode == VTK_SCALAR_MODE_DEFAULT ||
+                           scalarMode == VTK_SCALAR_MODE_USE_CELL_DATA ||
+                           scalarMode == VTK_SCALAR_MODE_USE_CELL_FIELD_DATA;
+  const bool usePointData = scalarMode == VTK_SCALAR_MODE_USE_POINT_DATA ||
+                            scalarMode == VTK_SCALAR_MODE_USE_POINT_FIELD_DATA;
+  const bool scalarVisibility = m_ScalarVisibility->GetValue() &&
+                                m_ScalarsToColors != nullptr && m_ScalarsToOpacity != nullptr;
+  const bool colorCells = scalarVisibility && useCellData && vcellscalars != nullptr;
+  const bool colorPoints = scalarVisibility && usePointData && vscalars != nullptr;
+
+  Point3D p;
+  Point2D p2d;
+
+  vlines->InitTraversal();
+  vpolys->InitTraversal();
+
+  mitk::Color outlineColor = m_Color->GetColor();
+
+  const auto setScalarColor = [this](double scalar)
+  {
+    double rgb[3] = {1.0, 1.0, 1.0};
+    m_ScalarsToColors->GetColor(scalar, rgb);
+    glColor4f(static_cast<float>(rgb[0]),
+              static_cast<float>(rgb[1]),
+              static_cast<float>(rgb[2]),
+              static_cast<float>(m_ScalarsToOpacity->GetValue(scalar)));
+  };
+
+  glLineWidth(static_cast<float>(m_LineWidth->GetValue()));
+
+  for (int i = 0; i < numberOfLines; ++i)
+  {
+    const vtkIdType *cell(nullptr);
+    vtkIdType cellSize(0);
+
+    vlines->GetNextCell(cellSize, cell);
+
+    if (colorCells)
+      setScalarColor(vcellscalars->GetComponent(i, 0));
+    else
+      glColor4f(outlineColor[0], outlineColor[1], outlineColor[2], 1.0f);
+
+    glBegin(GL_LINE_LOOP);
+    for (int j = 0; j < cellSize; ++j)
+    {
+      if (colorPoints)
+        setScalarColor(vscalars->GetComponent(cell[j], 0));
+
+      vpoints->GetPoint(cell[j], vp);
+      vtktransform->TransformPoint(vp, vp);
+      vtk2itk(vp, p);
+      renderer->WorldToDisplay(p, p2d);
+      glVertex2f(p2d[0], p2d[1]);
+    }
+    glEnd();
+  }
+
+  const bool polyOutline = m_Outline->GetValue();
+
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+  if (colorCells || colorPoints)
+  {
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+    for (int i = 0; i < numberOfPolys; ++i)
+    {
+      const vtkIdType *cell(nullptr);
+      vtkIdType cellSize(0);
+
+      vpolys->GetNextCell(cellSize, cell);
+
+      if (colorCells)
+        setScalarColor(vcellscalars->GetComponent(i + numberOfLines, 0));
+
+      glBegin(GL_POLYGON);
+      for (int j = 0; j < cellSize; ++j)
+      {
+        if (colorPoints)
+          setScalarColor(vscalars->GetComponent(cell[j], 0));
+
+        vpoints->GetPoint(cell[j], vp);
+        vtktransform->TransformPoint(vp, vp);
+        vtk2itk(vp, p);
+        renderer->WorldToDisplay(p, p2d);
+        glVertex2f(p2d[0], p2d[1]);
+      }
+      glEnd();
+    }
+  }
+
+  if (polyOutline)
+  {
+    vpolys->InitTraversal();
+
+    glColor4f(outlineColor[0], outlineColor[1], outlineColor[2], 1.0f);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    for (int i = 0; i < numberOfPolys; ++i)
+    {
+      const vtkIdType *cell(nullptr);
+      vtkIdType cellSize(0);
+
+      vpolys->GetNextCell(cellSize, cell);
+
+      glBegin(GL_POLYGON);
+      for (int j = 0; j < cellSize; ++j)
+      {
+        vpoints->GetPoint(cell[j], vp);
+        vtktransform->TransformPoint(vp, vp);
+        vtk2itk(vp, p);
+        renderer->WorldToDisplay(p, p2d);
+        glVertex2f(p2d[0], p2d[1]);
+      }
+      glEnd();
+    }
+  }
+  glDisable(GL_BLEND);
+]=])
+
+  string(FIND "${mitk_ugrid_mapper2d_normalized_contents}"
+    "${mitk_ugrid_section_original}" mitk_ugrid_section_patch_location)
+  if(mitk_ugrid_section_patch_location EQUAL -1)
+    message(FATAL_ERROR
+      "The expected MITK v2025.12.2 UnstructuredGridMapper2D context was not found; refusing to patch an unknown source revision")
+  endif()
+
+  string(REPLACE "${mitk_ugrid_section_original}" "${mitk_ugrid_section_patched}"
+    mitk_ugrid_mapper2d_normalized_contents "${mitk_ugrid_mapper2d_normalized_contents}")
+  if(NOT mitk_ugrid_mapper2d_uses_crlf EQUAL -1)
+    string(REPLACE "\n" "\r\n" mitk_ugrid_mapper2d_contents "${mitk_ugrid_mapper2d_normalized_contents}")
+  else()
+    set(mitk_ugrid_mapper2d_contents "${mitk_ugrid_mapper2d_normalized_contents}")
+  endif()
+  file(WRITE "${mitk_ugrid_mapper2d_file}" "${mitk_ugrid_mapper2d_contents}")
+  message(STATUS "Applied MITK v2025.12.2 UGrid 2D section-rendering patch")
+else()
+  message(STATUS "MITK v2025.12.2 UGrid 2D section-rendering patch is already applied")
+endif()
