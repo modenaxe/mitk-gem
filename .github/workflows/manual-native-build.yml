@@ -306,7 +306,7 @@ jobs:
             -DMITK_BUILD_TESTING:BOOL=OFF \
             -DMITK_USE_Python3:BOOL=OFF
 
-      - name: Verify Windows runtime configuration
+      - name: Verify Windows superbuild configuration
         if: matrix.id == 'windows'
         shell: pwsh
         run: |
@@ -325,6 +325,20 @@ jobs:
           $expectedArgument = "-DCMAKE_MSVC_RUNTIME_LIBRARY:STRING=$expectedRuntime"
           if (-not $mitkConfigureCommand.Contains($expectedArgument)) {
             throw "The generated MITK configure command does not forward '$expectedArgument'."
+          }
+
+          # Boost is header-only in MITK's staged dependency prefix, but MITK
+          # does not install BoostConfig.cmake. Check the nested project gets
+          # the explicit root before spending hours compiling MITK.
+          $gemInitialCachePath = "b\CMakeExternals\tmp\MITK-GEM-Configure\MITK-GEM-Configure-cache-$env:BUILD_TYPE.cmake"
+          if (-not (Test-Path -LiteralPath $gemInitialCachePath)) {
+            throw "Expected generated nested-project initial cache at '$gemInitialCachePath'."
+          }
+          $gemInitialCache = Get-Content -LiteralPath $gemInitialCachePath -Raw
+          $boostRoot = ((Join-Path (Resolve-Path -LiteralPath 'b') 'MITK-superbuild\ep') -replace '\\', '/')
+          $boostRootEntry = "set(Boost_ROOT `"$boostRoot`" CACHE PATH `"Initial cache`" FORCE)"
+          if (-not $gemInitialCache.Contains($boostRootEntry)) {
+            throw "The generated MITK-GEM initial cache does not forward Boost_ROOT '$boostRoot'."
           }
 
           cmake "-DMITK_SOURCE_DIR:PATH=$env:MITK_SOURCE_DIR" `

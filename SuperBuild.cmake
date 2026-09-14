@@ -164,6 +164,17 @@ set(proj ${MY_PROJECT_NAME}-Configure)
 
 set(cmake_cache_args)
 
+# MITK's superbuild stages Boost headers in its ep prefix but does not install
+# BoostConfig.cmake. Forward the explicit root to the nested MITK-GEM configure
+# step. This must be assembled here, after cmake_cache_args is initialized;
+# CMakeExternals/MITK.cmake is included earlier in this file.
+if(MITK_USE_SUPERBUILD)
+  get_filename_component(_mitk_gem_mitk_superbuild_dir "${MITK_DIR}" DIRECTORY)
+  list(APPEND cmake_cache_args
+    "-DBoost_ROOT:PATH=${_mitk_gem_mitk_superbuild_dir}/ep")
+  unset(_mitk_gem_mitk_superbuild_dir)
+endif()
+
 if(Qt6_DIR)
   list(APPEND cmake_cache_args "-DQt6_DIR:PATH=${mitk_gem_qt6_dir_cmake}")
 endif()

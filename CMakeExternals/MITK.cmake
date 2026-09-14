@@ -278,8 +278,12 @@ if(NOT MITK_DIR)
     set(MITK_DIR "${CMAKE_CURRENT_BINARY_DIR}/${MITK_BINARY_DIR}/MITK-build")
     # MITK's exported CMake package finds its third-party dependencies (Boost,
     # ITK, VTK, and others) in this staged prefix. Keep it on the consuming
-    # project's search path when MITK is built through its superbuild.
-    list(PREPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_BINARY_DIR}/${MITK_BINARY_DIR}/ep")
+    # project's search path when MITK is built through its superbuild. Boost is
+    # special: MITK stages its headers but does not install BoostConfig.cmake.
+    set(_mitk_gem_mitk_superbuild_prefix
+      "${CMAKE_CURRENT_BINARY_DIR}/${MITK_BINARY_DIR}/ep")
+    list(PREPEND CMAKE_PREFIX_PATH "${_mitk_gem_mitk_superbuild_prefix}")
+    unset(_mitk_gem_mitk_superbuild_prefix)
   else()
     set(MITK_DIR "${CMAKE_CURRENT_BINARY_DIR}/${MITK_BINARY_DIR}")
   endif()

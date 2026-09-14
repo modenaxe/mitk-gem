@@ -1,6 +1,20 @@
 # MITK's superbuild stages the Boost 1.91 headers but does not install the
-# Boost CMake package configuration.  CGAL 6.2 uses config-mode discovery
+# Boost CMake package configuration. CGAL 6.2 uses config-mode discovery
 # with CMake 4.x, so expose the header-only targets required by CGAL.
+#
+# The outer superbuild explicitly forwards Boost_ROOT. Also accept a staged
+# MITK prefix already supplied through CMAKE_PREFIX_PATH so this compatibility
+# package remains usable by direct, non-superbuild configurations.
+if(NOT DEFINED Boost_ROOT OR NOT EXISTS "${Boost_ROOT}/include/boost/version.hpp")
+  foreach(_mitk_gem_prefix IN LISTS CMAKE_PREFIX_PATH)
+    if(EXISTS "${_mitk_gem_prefix}/include/boost/version.hpp")
+      set(Boost_ROOT "${_mitk_gem_prefix}")
+      break()
+    endif()
+  endforeach()
+  unset(_mitk_gem_prefix)
+endif()
+
 if(NOT DEFINED Boost_ROOT OR NOT EXISTS "${Boost_ROOT}/include/boost/version.hpp")
   message(FATAL_ERROR
     "MITK-GEM's Boost compatibility package requires Boost_ROOT to reference "
