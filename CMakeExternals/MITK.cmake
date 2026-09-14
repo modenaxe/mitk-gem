@@ -188,6 +188,14 @@ if(NOT MITK_DIR)
   # Additional MITK CMake variables
   #-----------------------------------------------------------------------------
 
+  # A static (/MT) GDCM linked into dynamic-runtime ITK produces duplicate CRT
+  # definitions in ITKIOGDCM. Pass the selected runtime into MITK explicitly;
+  # its patched superbuild then propagates it to every external project.
+  if(MSVC)
+    list(APPEND additional_mitk_cmakevars
+      "-DCMAKE_MSVC_RUNTIME_LIBRARY:STRING=${CMAKE_MSVC_RUNTIME_LIBRARY}")
+  endif()
+
   if(MITK_USE_Qt6 AND Qt6_DIR)
     list(APPEND additional_mitk_cmakevars "-DQt6_DIR:PATH=${Qt6_DIR}")
   endif()

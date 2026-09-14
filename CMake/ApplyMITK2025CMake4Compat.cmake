@@ -18,21 +18,34 @@ string(REPLACE "\r\n" "\n" mitk_normalized_contents "${mitk_superbuild_contents}
 string(CONCAT mitk_original
   "set(ep_common_args\n"
   "  -DCMAKE_POLICY_DEFAULT_CMP0091:STRING=OLD")
-string(CONCAT mitk_patched
+string(CONCAT mitk_legacy_patched
   "set(ep_common_args\n"
   "  # Required by pinned dependencies with pre-3.5 minimum CMake versions.\n"
   "  -DCMAKE_POLICY_VERSION_MINIMUM:STRING=3.5\n"
   "  -DCMAKE_POLICY_DEFAULT_CMP0091:STRING=OLD")
+string(CONCAT mitk_patched
+  "set(ep_common_args\n"
+  "  # Required by pinned dependencies with pre-3.5 minimum CMake versions.\n"
+  "  -DCMAKE_POLICY_VERSION_MINIMUM:STRING=3.5\n"
+  "  -DCMAKE_POLICY_DEFAULT_CMP0091:STRING=NEW")
 
 string(FIND "${mitk_normalized_contents}" "${mitk_patched}" mitk_already_patched)
 if(mitk_already_patched EQUAL -1)
-  string(FIND "${mitk_normalized_contents}" "${mitk_original}" mitk_patch_location)
-  if(mitk_patch_location EQUAL -1)
+  set(mitk_patch_location -1)
+  string(FIND "${mitk_normalized_contents}" "${mitk_legacy_patched}" mitk_legacy_patch_location)
+  if(NOT mitk_legacy_patch_location EQUAL -1)
+    string(REPLACE "${mitk_legacy_patched}" "${mitk_patched}" mitk_normalized_contents "${mitk_normalized_contents}")
+  else()
+    string(FIND "${mitk_normalized_contents}" "${mitk_original}" mitk_patch_location)
+  endif()
+  if(mitk_legacy_patch_location EQUAL -1 AND mitk_patch_location EQUAL -1)
     message(FATAL_ERROR
       "The expected MITK v2025.12.2 SuperBuild.cmake context was not found; refusing to patch an unknown source revision")
   endif()
 
-  string(REPLACE "${mitk_original}" "${mitk_patched}" mitk_normalized_contents "${mitk_normalized_contents}")
+  if(mitk_legacy_patch_location EQUAL -1)
+    string(REPLACE "${mitk_original}" "${mitk_patched}" mitk_normalized_contents "${mitk_normalized_contents}")
+  endif()
   if(NOT mitk_uses_crlf EQUAL -1)
     string(REPLACE "\n" "\r\n" mitk_superbuild_contents "${mitk_normalized_contents}")
   else()
@@ -42,6 +55,95 @@ if(mitk_already_patched EQUAL -1)
   message(STATUS "Applied MITK v2025.12.2 CMake 4 compatibility patch")
 else()
   message(STATUS "MITK v2025.12.2 CMake 4 compatibility patch is already applied")
+endif()
+
+# The pinned MITK source keeps CMP0091 in its legacy mode, which lets CMake
+# select a static runtime for some external projects. Enable CMake's modern
+# runtime abstraction before MITK's first project() call instead.
+set(mitk_cmakelists_file "${MITK_SOURCE_DIR}/CMakeLists.txt")
+if(NOT EXISTS "${mitk_cmakelists_file}")
+  message(FATAL_ERROR "MITK CMakeLists.txt was not found: ${mitk_cmakelists_file}")
+endif()
+
+file(READ "${mitk_cmakelists_file}" mitk_cmakelists_contents)
+string(FIND "${mitk_cmakelists_contents}" "\r\n" mitk_cmakelists_uses_crlf)
+string(REPLACE "\r\n" "\n" mitk_cmakelists_normalized_contents "${mitk_cmakelists_contents}")
+set(mitk_cmp0091_original "cmake_policy(SET CMP0091 OLD)")
+set(mitk_cmp0091_patched "cmake_policy(SET CMP0091 NEW)")
+string(CONCAT mitk_cmp0091_comment_original
+  "    We pass CMP0091 to all external projects as command-line argument:\n"
+  "      -DCMAKE_POLICY_DEFAULT_CMP0091:STRING=OLD")
+string(CONCAT mitk_cmp0091_comment_patched
+  "    We pass CMP0091 and CMAKE_MSVC_RUNTIME_LIBRARY to all external projects:\n"
+  "      -DCMAKE_POLICY_DEFAULT_CMP0091:STRING=NEW")
+string(FIND "${mitk_cmakelists_normalized_contents}" "${mitk_cmp0091_patched}" mitk_cmp0091_already_patched)
+if(mitk_cmp0091_already_patched EQUAL -1)
+  string(FIND "${mitk_cmakelists_normalized_contents}" "${mitk_cmp0091_original}" mitk_cmp0091_patch_location)
+  if(mitk_cmp0091_patch_location EQUAL -1)
+    message(FATAL_ERROR
+      "The expected MITK v2025.12.2 CMP0091 context was not found; refusing to patch an unknown source revision")
+  endif()
+
+  string(REPLACE "${mitk_cmp0091_original}" "${mitk_cmp0091_patched}" mitk_cmakelists_normalized_contents "${mitk_cmakelists_normalized_contents}")
+  if(NOT mitk_cmakelists_uses_crlf EQUAL -1)
+    string(REPLACE "\n" "\r\n" mitk_cmakelists_contents "${mitk_cmakelists_normalized_contents}")
+  else()
+    set(mitk_cmakelists_contents "${mitk_cmakelists_normalized_contents}")
+  endif()
+  file(WRITE "${mitk_cmakelists_file}" "${mitk_cmakelists_contents}")
+  message(STATUS "Applied MITK v2025.12.2 dynamic MSVC-runtime policy patch")
+else()
+  message(STATUS "MITK v2025.12.2 dynamic MSVC-runtime policy patch is already applied")
+endif()
+
+string(FIND "${mitk_cmakelists_normalized_contents}" "${mitk_cmp0091_comment_patched}" mitk_cmp0091_comment_already_patched)
+if(mitk_cmp0091_comment_already_patched EQUAL -1)
+  string(FIND "${mitk_cmakelists_normalized_contents}" "${mitk_cmp0091_comment_original}" mitk_cmp0091_comment_patch_location)
+  if(mitk_cmp0091_comment_patch_location EQUAL -1)
+    message(FATAL_ERROR
+      "The expected MITK v2025.12.2 CMP0091 comment context was not found; refusing to patch an unknown source revision")
+  endif()
+
+  string(REPLACE "${mitk_cmp0091_comment_original}" "${mitk_cmp0091_comment_patched}" mitk_cmakelists_normalized_contents "${mitk_cmakelists_normalized_contents}")
+  if(NOT mitk_cmakelists_uses_crlf EQUAL -1)
+    string(REPLACE "\n" "\r\n" mitk_cmakelists_contents "${mitk_cmakelists_normalized_contents}")
+  else()
+    set(mitk_cmakelists_contents "${mitk_cmakelists_normalized_contents}")
+  endif()
+  file(WRITE "${mitk_cmakelists_file}" "${mitk_cmakelists_contents}")
+  message(STATUS "Updated MITK v2025.12.2 CMP0091 runtime-policy documentation")
+endif()
+
+# Forward CMAKE_MSVC_RUNTIME_LIBRARY to every MITK external project. In
+# particular, this makes static GDCM objects and ITK use /MD (or /MDd)
+# consistently, eliminating the ITKIOGDCM link-time CRT conflict.
+string(CONCAT mitk_runtime_original
+  "if(MSVC)\n"
+  "  list(APPEND ep_common_args\n"
+  "    -DCMAKE_DEBUG_POSTFIX:STRING=d")
+string(CONCAT mitk_runtime_patched
+  "if(MSVC)\n"
+  "  list(APPEND ep_common_args\n"
+  "    \"-DCMAKE_MSVC_RUNTIME_LIBRARY:STRING=\${CMAKE_MSVC_RUNTIME_LIBRARY}\"\n"
+  "    -DCMAKE_DEBUG_POSTFIX:STRING=d")
+string(FIND "${mitk_normalized_contents}" "${mitk_runtime_patched}" mitk_runtime_already_patched)
+if(mitk_runtime_already_patched EQUAL -1)
+  string(FIND "${mitk_normalized_contents}" "${mitk_runtime_original}" mitk_runtime_patch_location)
+  if(mitk_runtime_patch_location EQUAL -1)
+    message(FATAL_ERROR
+      "The expected MITK v2025.12.2 MSVC external-project context was not found; refusing to patch an unknown source revision")
+  endif()
+
+  string(REPLACE "${mitk_runtime_original}" "${mitk_runtime_patched}" mitk_normalized_contents "${mitk_normalized_contents}")
+  if(NOT mitk_uses_crlf EQUAL -1)
+    string(REPLACE "\n" "\r\n" mitk_superbuild_contents "${mitk_normalized_contents}")
+  else()
+    set(mitk_superbuild_contents "${mitk_normalized_contents}")
+  endif()
+  file(WRITE "${mitk_superbuild_file}" "${mitk_superbuild_contents}")
+  message(STATUS "Applied MITK v2025.12.2 dynamic MSVC-runtime propagation patch")
+else()
+  message(STATUS "MITK v2025.12.2 dynamic MSVC-runtime propagation patch is already applied")
 endif()
 
 # GDCM 3.0.14's embedded socket++ library exports C++ standard-library

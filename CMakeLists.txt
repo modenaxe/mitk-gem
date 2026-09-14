@@ -6,6 +6,18 @@ endif()
 
 cmake_minimum_required(VERSION ${MITK_GEM_CMAKE_MINIMUM_VERSION}...4.3 FATAL_ERROR)
 
+# Keep the executable, Qt, MITK, and every project built by MITK's
+# superbuild on the dynamic MSVC runtime. This must be decided before the
+# first project() / enable_language() call; setting it later does not update
+# targets which CMake has already initialized.
+if(WIN32)
+  if(POLICY CMP0091)
+    cmake_policy(SET CMP0091 NEW)
+  endif()
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL"
+      CACHE STRING "MSVC runtime library used by MITK-GEM and its dependencies" FORCE)
+endif()
+
 # Change project and application name to your own
 set(MY_PROJECT_NAME MITK-GEM)
 set(MY_APP_NAME MITK-GEM)
