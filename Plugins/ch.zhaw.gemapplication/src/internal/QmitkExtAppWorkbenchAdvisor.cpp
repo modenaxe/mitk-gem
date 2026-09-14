@@ -15,6 +15,7 @@ See LICENSE.txt or http://www.mitk.org for details.
 ===================================================================*/
 
 #include "QmitkExtAppWorkbenchAdvisor.h"
+#include "GemWorkbenchWindowAdvisor.h"
 #include "internal/QmitkExtApplicationPlugin.h"
 
 #include <QmitkExtWorkbenchWindowAdvisor.h>
@@ -32,7 +33,7 @@ QmitkExtAppWorkbenchAdvisor::Initialize(berry::IWorkbenchConfigurer::Pointer con
 berry::WorkbenchWindowAdvisor*
 QmitkExtAppWorkbenchAdvisor::CreateWorkbenchWindowAdvisor(berry::IWorkbenchWindowConfigurer::Pointer configurer)
 {
-  QmitkExtWorkbenchWindowAdvisor* advisor = new QmitkExtWorkbenchWindowAdvisor(this, configurer);
+  auto* advisor = new GemWorkbenchWindowAdvisor(this, configurer);
 
   // Exclude the help perspective from org.blueberry.ui.qt.help from
   // the normal perspective list.

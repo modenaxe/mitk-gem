@@ -59,6 +59,7 @@ private:
     friend class UGVisVolumeObserver;
     void UpdateGUI();
     void ResetGUI();
+    void EnsureRenderingProperties(mitk::DataNode::Pointer node);
     void SelectUG(mitk::UnstructuredGrid::Pointer, mitk::DataNode::Pointer);
     void SetFieldDataComboBoxEntries(vtkFieldData *);
     void UpdateFieldDataComboBoxes(mitk::UnstructuredGrid::Pointer);

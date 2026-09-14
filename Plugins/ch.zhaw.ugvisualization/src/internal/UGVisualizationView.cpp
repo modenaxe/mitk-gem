@@ -142,9 +142,25 @@ void UGVisualizationView::ResetGUI(){
     m_Controls.m_TransferFunctionWidget->setVisible(false);
 }
 
+void UGVisualizationView::EnsureRenderingProperties(mitk::DataNode::Pointer node) {
+    if(node.IsNull()){
+        return;
+    }
+
+    // Unstructured grids are not handled by MITK's core object factory, so
+    // attaching a mapper alone does not create its representation properties.
+    // Without these properties, the combined representation control only
+    // exposes surface modes and volume rendering cannot be selected.
+    mitk::UnstructuredGridVtkMapper3D::SetDefaultProperties(node, nullptr, false);
+}
+
 void UGVisualizationView::SelectUG(mitk::UnstructuredGrid::Pointer _ugrid, mitk::DataNode::Pointer _node) {
     m_SelectedNode = _node;
     bool has3DMapper = _node->GetMapper(mitk::BaseRenderer::Standard3D);
+
+    if(has3DMapper){
+        EnsureRenderingProperties(_node);
+    }
 
     // update gui components
     m_Controls.m_SelectedLabel->setText(QString("Selected UG: ") + _node->GetName().c_str());
@@ -201,7 +217,10 @@ void UGVisualizationView::RenderingCheckboxClicked(bool) {
     if(isChecked && !hasMapper){
         m_SelectedNode->SetMapper(mitk::BaseRenderer::Standard2D, mitk::VtkGLMapperWrapper::New(mitk::UnstructuredGridMapper2D::New().GetPointer()));
         m_SelectedNode->SetMapper(mitk::BaseRenderer::Standard3D, mitk::UnstructuredGridVtkMapper3D::New());
-        m_SelectedNode->SetProperty("grid representation", mitk::GridRepresentationProperty::New(2));
+
+        EnsureRenderingProperties(m_SelectedNode);
+        m_SelectedNode->SetProperty(
+            "grid representation", mitk::GridRepresentationProperty::New(mitk::GridRepresentationProperty::SURFACE));
 
         auto renderer = mitk::BaseRenderer::GetInstance(mitk::BaseRenderer::GetRenderWindowByName("stdmulti.widget4"));
         m_SelectedNode->SetProperty("outline polygons", mitk::BoolProperty::New(true));

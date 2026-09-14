@@ -6,6 +6,7 @@ set(INTERNAL_CPP_FILES
         QmitkExtApplication.cpp
         QmitkExtApplicationPlugin.cpp
         QmitkExtAppWorkbenchAdvisor.cpp
+        GemWorkbenchWindowAdvisor.cpp
         perspectives/GemPerspective.cpp
         )
 

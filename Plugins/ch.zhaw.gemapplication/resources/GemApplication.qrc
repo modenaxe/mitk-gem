@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/ch.zhaw.gemapplication">
         <file>icon.png</file>
+        <file alias="mitk_gem.png">../../../mitk_gem.png</file>
     </qresource>
 </RCC>

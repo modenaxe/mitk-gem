@@ -20,6 +20,7 @@ See LICENSE.txt or http://www.mitk.org for details.
 
 #include <mitkVersion.h>
 #include <mitkLog.h>
+#include <mitkWorkbenchUtil.h>
 
 #include <service/cm/ctkConfigurationAdmin.h>
 #include <service/cm/ctkConfiguration.h>
@@ -49,6 +50,16 @@ void QmitkExtApplicationPlugin::start(ctkPluginContext* context)
   berry::AbstractUICTKPlugin::start(context);
 
   this->context = context;
+
+  // The legacy MITK-GEM workbench displayed this product mark in the render
+  // windows. Modern MITK resolves custom renderer logos through a persistent
+  // preference, so register the plug-in resource before the editor creates
+  // its multi-widget.
+  if (!mitk::WorkbenchUtil::SetDepartmentLogoPreference(
+        ":/ch.zhaw.gemapplication/mitk_gem.png", context))
+  {
+    MITK_WARN << "Unable to register the MITK-GEM render-window watermark.";
+  }
 
   BERRY_REGISTER_EXTENSION_CLASS(GemPerspective, context);
   BERRY_REGISTER_EXTENSION_CLASS(QmitkExtApplication, context);

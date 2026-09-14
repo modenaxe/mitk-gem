@@ -2,4 +2,7 @@ set(Plugin-Name "MITK-GEM Application")
 set(Plugin-Version "2025.12.2")
 set(Plugin-Vendor "ZHAW")
 set(Plugin-ContactAddress "https://simtk.org/home/mitk-gem")
-set(Require-Plugin org.mitk.gui.qt.ext)
+set(Require-Plugin
+  org.mitk.gui.qt.ext
+  org.mitk.gui.common
+)
