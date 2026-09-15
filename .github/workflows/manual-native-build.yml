@@ -249,7 +249,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/mitk-source
-          key: ${{ runner.os }}-mitk-source-${{ env.MITK_VERSION }}-${{ hashFiles('CMakeExternals/MITK.cmake', 'CMake/ApplyMITK2025CMake4Compat.cmake', 'CMake/MITK-GEM-MITKInitialCache.cmake.in') }}
+          key: ${{ runner.os }}-mitk-source-${{ env.MITK_VERSION }}-${{ hashFiles('CMakeExternals/MITK.cmake', 'CMake/ApplyMITK2025CMake4Compat.cmake', 'CMake/MITK-GEM-MITKInitialCache.cmake.in', 'CMake/Whitelists/VCLab.cmake') }}
 
       - name: Restore MITK external source cache
         uses: actions/cache@v6
@@ -257,7 +257,7 @@ jobs:
           # MITK v2025.12.2 warns when its nested build directory exceeds 40
           # characters. `b` keeps the Windows GitHub workspace at that limit.
           path: b/MITK-superbuild/ep/src
-          key: ${{ runner.os }}-mitk-external-sources-${{ env.MITK_VERSION }}-${{ hashFiles('CMakeExternals/MITK.cmake', 'CMake/ApplyMITK2025CMake4Compat.cmake', 'CMake/MITK-GEM-MITKInitialCache.cmake.in') }}
+          key: ${{ runner.os }}-mitk-external-sources-${{ env.MITK_VERSION }}-${{ hashFiles('CMakeExternals/MITK.cmake', 'CMake/ApplyMITK2025CMake4Compat.cmake', 'CMake/MITK-GEM-MITKInitialCache.cmake.in', 'CMake/Whitelists/VCLab.cmake') }}
 
       - name: Prepare MITK source
         shell: pwsh
@@ -325,6 +325,12 @@ jobs:
           $expectedArgument = "-DCMAKE_MSVC_RUNTIME_LIBRARY:STRING=$expectedRuntime"
           if (-not $mitkConfigureCommand.Contains($expectedArgument)) {
             throw "The generated MITK configure command does not forward '$expectedArgument'."
+          }
+
+          $mitkInitialCache = ((Resolve-Path -LiteralPath 'b\MITK-GEM-MITKInitialCache.cmake').Path -replace '\\', '/')
+          $expectedInitialCacheArgument = "-DMITK_INITIAL_CACHE_FILE:FILEPATH=$mitkInitialCache"
+          if (-not $mitkConfigureCommand.Contains($expectedInitialCacheArgument)) {
+            throw "The generated MITK configure command does not forward '$expectedInitialCacheArgument' to MITK-build."
           }
 
           # Boost is header-only in MITK's staged dependency prefix, but MITK

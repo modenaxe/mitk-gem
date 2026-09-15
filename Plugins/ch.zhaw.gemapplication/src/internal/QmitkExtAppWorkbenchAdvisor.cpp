@@ -19,6 +19,9 @@ See LICENSE.txt or http://www.mitk.org for details.
 #include "internal/QmitkExtApplicationPlugin.h"
 
 #include <QmitkExtWorkbenchWindowAdvisor.h>
+#include <berryQtPreferences.h>
+#include <berryWorkbenchPlugin.h>
+#include <mitkIPreferences.h>
 #include "WorkbenchUtils.h"
 
 const QString QmitkExtAppWorkbenchAdvisor::DEFAULT_PERSPECTIVE_ID = "org.mitk.perspectives.gem";
@@ -26,6 +29,18 @@ const QString QmitkExtAppWorkbenchAdvisor::DEFAULT_PERSPECTIVE_ID = "org.mitk.pe
 void
 QmitkExtAppWorkbenchAdvisor::Initialize(berry::IWorkbenchConfigurer::Pointer configurer)
 {
+  // MITK defaults to its dark style. GEM's shipped icons and controls are
+  // authored for a light canvas, so use the Light style for a new profile.
+  // An explicit style selected by the user remains untouched.
+  auto* stylePreferences = berry::WorkbenchPlugin::GetDefault()->GetPreferences()->Node(
+    berry::QtPreferences::QT_STYLES_NODE);
+  if (stylePreferences->Get(berry::QtPreferences::QT_STYLE_NAME, "").empty())
+  {
+    stylePreferences->Put(berry::QtPreferences::QT_STYLE_NAME,
+                          ":/org.blueberry.ui.qt/lightstyle.qss");
+    stylePreferences->Flush();
+  }
+
   berry::QtWorkbenchAdvisor::Initialize(configurer);
   configurer->SetSaveAndRestore(true);
 }

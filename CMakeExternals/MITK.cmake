@@ -181,7 +181,14 @@ if(NOT MITK_DIR)
       "${CMAKE_CURRENT_SOURCE_DIR}/CMake/MITK-GEM-MITKInitialCache.cmake.in"
       "${_mitk_gem_initial_cache}"
       @ONLY)
-    list(APPEND additional_mitk_cmakevars "-C${_mitk_gem_initial_cache}")
+    # MITK is itself a superbuild.  The -C argument configures its outer
+    # superbuild, while MITK_INITIAL_CACHE_FILE is what forwards these plug-in
+    # selections to MITK-build, where the plug-ins are actually configured.
+    # Without the latter, Segmentation and Measurement Toolbox silently fall
+    # back to MITK's OFF defaults in portable CI packages.
+    list(APPEND additional_mitk_cmakevars
+      "-C${_mitk_gem_initial_cache}"
+      "-DMITK_INITIAL_CACHE_FILE:FILEPATH=${_mitk_gem_initial_cache}")
   endif()
 
   #-----------------------------------------------------------------------------

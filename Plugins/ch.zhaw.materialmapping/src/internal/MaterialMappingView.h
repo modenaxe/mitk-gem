@@ -38,8 +38,10 @@ protected slots:
     void deleteSelectedRows();
     void startButtonClicked();
     void onMaterialMappingFinished();
+    void exportFemModelClicked();
     void tableDataChanged();
     void unitSelectionChanged(int);
+    void updateExportControls();
 #ifdef MITK_GEM_ENABLE_GUI_TESTS
     void compareGrids();
 #endif

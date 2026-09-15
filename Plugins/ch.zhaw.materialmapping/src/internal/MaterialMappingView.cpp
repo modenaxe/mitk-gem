@@ -5,11 +5,13 @@
 #include <berryIWorkbenchWindow.h>
 #include <QMessageBox>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QShortcut>
 #include <QtConcurrentRun>
 #include <QWidget>
 #include <mitkException.h>
 #include <mitkImage.h>
+#include <mitkIOUtil.h>
 #include <mitkNodePredicateAnd.h>
 #include <mitkNodePredicateDataType.h>
 #include <mitkNodePredicateNot.h>
@@ -18,6 +20,7 @@
 
 #include <vtkImageCast.h>
 #include <vtkCellArray.h>
+#include <vtkCellData.h>
 #include <vtkPointData.h>
 #include <vtkUnstructuredGrid.h>
 
@@ -32,6 +35,8 @@
 #include "GuiHelpers.h"
 #include "MaterialMappingFilter.h"
 #include "PowerLawWidget.h"
+#include <GemFemExport.h>
+#include "FemFileWriterServiceUtils.h"
 
 namespace
 {
@@ -101,6 +106,12 @@ void MaterialMappingView::CreateQtPartControl(QWidget *parent) {
     m_Controls.greyscaleImageComboBox->SetDataStorage(this->GetDataStorage());
     m_Controls.greyscaleImageComboBox->SetAutoSelectNewItems(false);
 
+    // The writers remain available through File > Save, but keeping the FEM
+    // export workflow here makes its input and selected material map explicit.
+    m_Controls.exportMeshComboBox->SetPredicate(WorkbenchUtils::createIsUnstructuredGridTypePredicate());
+    m_Controls.exportMeshComboBox->SetDataStorage(this->GetDataStorage());
+    m_Controls.exportMeshComboBox->SetAutoSelectNewItems(false);
+
     // Optional GUI test controls are only compiled in testing builds.
 #ifdef MITK_GEM_ENABLE_GUI_TESTS
     {
@@ -149,12 +160,18 @@ void MaterialMappingView::CreateQtPartControl(QWidget *parent) {
             this, [this](const mitk::DataNode*) { updateStartButtonState(); });
     connect(m_Controls.greyscaleImageComboBox, &QmitkDataStorageComboBox::OnSelectionChanged,
             this, [this](const mitk::DataNode*) { updateStartButtonState(); });
+    connect(m_Controls.exportMeshComboBox, &QmitkDataStorageComboBox::OnSelectionChanged,
+            this, [this](const mitk::DataNode*) { updateExportControls(); });
+    connect(m_Controls.exportFormatComboBox, SIGNAL(currentIndexChanged(int)),
+            this, SLOT(updateExportControls()));
+    connect(m_Controls.exportFemButton, SIGNAL(clicked()), this, SLOT(exportFemModelClicked()));
     connect(&m_WorkerWatcher, &QFutureWatcher<MappingResult>::finished,
             this, &MaterialMappingView::onMaterialMappingFinished, Qt::QueuedConnection);
 
     m_Controls.unitSelectionComboBox->setCurrentIndex(0);
     unitSelectionChanged(0);
     updateStartButtonState();
+    updateExportControls();
 
     for(auto *widget : m_Controls.scrollAreaWidgetContents->findChildren<QWidget*>()){
         widget->installEventFilter(this);
@@ -299,6 +316,8 @@ void MaterialMappingView::onMaterialMappingFinished()
             newNode->SetProperty("name", mitk::StringProperty::New("material mapped mesh"));
             newNode->SetProperty("layer", mitk::IntProperty::New(1));
             GetDataStorage()->Add(newNode);
+            m_Controls.exportMeshComboBox->SetSelectedNode(newNode);
+            updateExportControls();
         }
         catch (const mitk::Exception& exception)
         {
@@ -387,6 +406,127 @@ void MaterialMappingView::updateStartButtonState()
     const bool imageIsValid = MaterialMappingInputValidation::ValidateIntensityImageNode(imageNode, imageError);
     const bool meshIsValid = MaterialMappingInputValidation::ValidateVolumeMeshNode(meshNode, meshError);
     m_Controls.startButton->setEnabled(imageIsValid && meshIsValid);
+}
+
+void MaterialMappingView::updateExportControls()
+{
+    const auto meshNode = m_Controls.exportMeshComboBox->GetSelectedNode();
+    auto* mesh = meshNode == nullptr ? nullptr : dynamic_cast<mitk::UnstructuredGrid*>(meshNode->GetData());
+    auto* grid = mesh == nullptr ? nullptr : mesh->GetVtkUnstructuredGrid();
+    const bool isFebio = m_Controls.exportFormatComboBox->currentIndex() == 2;
+
+    const QString selectedMethod = m_Controls.exportMaterialMethodComboBox->currentText();
+    m_Controls.exportMaterialMethodComboBox->blockSignals(true);
+    m_Controls.exportMaterialMethodComboBox->clear();
+
+    if (grid != nullptr && grid->GetCellData() != nullptr)
+    {
+        const auto addMethodIfAvailable = [this, grid](gem::io::MaterialMappingMethod method, const QString& label) {
+            if (grid->GetCellData()->GetArray(gem::io::GetMaterialArrayName(method)) != nullptr)
+                m_Controls.exportMaterialMethodComboBox->addItem(label);
+        };
+        addMethodIfAvailable(gem::io::MaterialMappingMethod::MethodA, "Method A");
+        addMethodIfAvailable(gem::io::MaterialMappingMethod::MethodB, "Method B");
+        if (isFebio)
+            addMethodIfAvailable(gem::io::MaterialMappingMethod::MethodE, "Method E");
+    }
+
+    const int previousMethodIndex = m_Controls.exportMaterialMethodComboBox->findText(selectedMethod);
+    if (previousMethodIndex >= 0)
+        m_Controls.exportMaterialMethodComboBox->setCurrentIndex(previousMethodIndex);
+    m_Controls.exportMaterialMethodComboBox->blockSignals(false);
+
+    std::string reason;
+    const bool meshIsExportable = grid != nullptr
+      && (isFebio ? gem::io::CanExportFebioMesh(grid, &reason)
+                  : gem::io::CanExportFemMesh(grid, &reason));
+    const bool hasMaterialMethod = m_Controls.exportMaterialMethodComboBox->count() > 0;
+    m_Controls.exportFemButton->setEnabled(meshIsExportable && hasMaterialMethod);
+
+    if (meshNode == nullptr)
+    {
+        m_Controls.exportStatusLabel->setText("Select a material-mapped volume mesh to export.");
+    }
+    else if (!meshIsExportable)
+    {
+        m_Controls.exportStatusLabel->setText(QString::fromStdString(reason));
+    }
+    else if (!hasMaterialMethod)
+    {
+        m_Controls.exportStatusLabel->setText("The selected mesh has no supported element material map for this format.");
+    }
+    else
+    {
+        m_Controls.exportStatusLabel->setText(
+          isFebio
+            ? "FEBio exports the selected continuous element material map."
+            : "Abaqus and ANSYS discretize the selected element material map into material cards.");
+    }
+}
+
+void MaterialMappingView::exportFemModelClicked()
+{
+    const auto meshNode = m_Controls.exportMeshComboBox->GetSelectedNode();
+    auto* mesh = meshNode == nullptr ? nullptr : dynamic_cast<mitk::UnstructuredGrid*>(meshNode->GetData());
+    auto* grid = mesh == nullptr ? nullptr : mesh->GetVtkUnstructuredGrid();
+    const bool isFebio = m_Controls.exportFormatComboBox->currentIndex() == 2;
+
+    std::string reason;
+    const bool meshIsExportable = grid != nullptr
+      && (isFebio ? gem::io::CanExportFebioMesh(grid, &reason)
+                  : gem::io::CanExportFemMesh(grid, &reason));
+    if (!meshIsExportable || m_Controls.exportMaterialMethodComboBox->currentText().isEmpty())
+    {
+        QMessageBox::warning(nullptr, "Invalid FEM export input",
+                             QString::fromStdString(reason.empty()
+                               ? "Select a material-mapped tetrahedral volume mesh and a supported material map."
+                               : reason));
+        return;
+    }
+
+    QString extension;
+    QString filter;
+    switch (m_Controls.exportFormatComboBox->currentIndex())
+    {
+      case 0:
+        extension = ".inp";
+        filter = tr("Abaqus input deck (*.inp)");
+        break;
+      case 1:
+        extension = ".cdb";
+        filter = tr("ANSYS Mechanical APDL command file (*.cdb)");
+        break;
+      default:
+        extension = ".feb";
+        filter = tr("FEBio model (*.feb)");
+        break;
+    }
+
+    QString fileName = QFileDialog::getSaveFileName(nullptr, tr("Export mapped FEM model"), QString(), filter);
+    if (fileName.isEmpty())
+        return;
+    if (!fileName.endsWith(extension, Qt::CaseInsensitive))
+        fileName += extension;
+
+    try
+    {
+        mitk::IFileWriter::Options options = isFebio
+          ? gem::io::writer_options::FebioDefaults()
+          : gem::io::writer_options::Defaults();
+        options[gem::io::writer_options::MaterialMethod] =
+          m_Controls.exportMaterialMethodComboBox->currentText().toStdString();
+        mitk::IOUtil::Save(mesh, fileName.toStdString(), options);
+        QMessageBox::information(nullptr, "FEM export complete",
+                                 tr("The mapped FEM model was written to:\n%1").arg(QFileInfo(fileName).absoluteFilePath()));
+    }
+    catch (const mitk::Exception& exception)
+    {
+        QMessageBox::warning(nullptr, "FEM export failed", exception.GetDescription());
+    }
+    catch (const std::exception& exception)
+    {
+        QMessageBox::warning(nullptr, "FEM export failed", exception.what());
+    }
 }
 
 void MaterialMappingView::unitSelectionChanged(int) {

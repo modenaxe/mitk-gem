@@ -1328,7 +1328,7 @@ QWidget {
           </layout>
          </item>
          <item>
-          <widget class="QToolButton" name="startButton">
+         <widget class="QToolButton" name="startButton">
            <property name="sizePolicy">
             <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
              <horstretch>0</horstretch>
@@ -1338,6 +1338,78 @@ QWidget {
            <property name="text">
             <string>Start</string>
            </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QGroupBox" name="femExportGroup">
+           <property name="title">
+            <string>FEM export</string>
+           </property>
+           <layout class="QVBoxLayout" name="femExportLayout">
+            <item>
+             <widget class="QLabel" name="exportMeshLabel">
+              <property name="text">
+               <string>Material-mapped volume mesh</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QmitkDataStorageComboBox" name="exportMeshComboBox"/>
+            </item>
+            <item>
+             <widget class="QLabel" name="exportFormatLabel">
+              <property name="text">
+               <string>Format</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QComboBox" name="exportFormatComboBox">
+              <item>
+               <property name="text">
+                <string>Abaqus input deck (*.inp)</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>ANSYS Mechanical APDL (*.cdb)</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>FEBio model (*.feb)</string>
+               </property>
+              </item>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="exportMaterialMethodLabel">
+              <property name="text">
+               <string>Material map</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QComboBox" name="exportMaterialMethodComboBox"/>
+            </item>
+            <item>
+             <widget class="QLabel" name="exportStatusLabel">
+              <property name="wordWrap">
+               <bool>true</bool>
+              </property>
+              <property name="text">
+               <string>Select a material-mapped volume mesh to export.</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QToolButton" name="exportFemButton">
+              <property name="text">
+               <string>Export mapped FEM model...</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
           </widget>
          </item>
          <item>
