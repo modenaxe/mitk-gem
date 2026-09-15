@@ -7,6 +7,7 @@ set(enabled_modules
   AlgorithmsExt
   Annotation
   BoundingShape
+  Chart
   ContourModel
   GraphAlgorithms
   DICOM
@@ -16,6 +17,7 @@ set(enabled_modules
   ImageDenoising
   ImageExtraction
   ImageStatistics
+  ImageStatisticsUI
   IOExt
   LegacyIO
   LegacyGL
