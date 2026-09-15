@@ -10,3 +10,11 @@ set(MITK_BUILD_org.mitk.gui.qt.segmentation ON CACHE BOOL
 # part of the legacy MITK-GEM distribution.
 set(MITK_BUILD_org.mitk.gui.qt.measurementtoolbox ON CACHE BOOL
   "Build the org.mitk.gui.qt.measurementtoolbox plug-in." FORCE)
+
+# The DICOM browser is an editor (opened from the DICOM toolbar button) and
+# the inspector is a view. Both are disabled by MITK's default profile even
+# when their modules are whitelisted.
+set(MITK_BUILD_org.mitk.gui.qt.dicombrowser ON CACHE BOOL
+  "Build the org.mitk.gui.qt.dicombrowser plug-in." FORCE)
+set(MITK_BUILD_org.mitk.gui.qt.dicominspector ON CACHE BOOL
+  "Build the org.mitk.gui.qt.dicominspector plug-in." FORCE)

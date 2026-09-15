@@ -18,6 +18,8 @@ See LICENSE.txt or http://www.mitk.org for details.
 
 #include <QmitkExtWorkbenchWindowAdvisor.h>
 
+class GemInitialDataReinitObserver;
+
 /**
  * Application-specific workbench startup hooks.
  *
@@ -30,5 +32,14 @@ class GemWorkbenchWindowAdvisor final : public QmitkExtWorkbenchWindowAdvisor
 public:
   using QmitkExtWorkbenchWindowAdvisor::QmitkExtWorkbenchWindowAdvisor;
 
+  ~GemWorkbenchWindowAdvisor() override;
+
   void PostWindowOpen() override;
+
+private:
+  // Defined and destroyed in the implementation file, after the observer's
+  // complete type is available. This advisor's inherited constructor is
+  // inline, so std::unique_ptr would otherwise require that type in every
+  // translation unit including this header.
+  GemInitialDataReinitObserver* m_InitialDataReinitObserver = nullptr;
 };

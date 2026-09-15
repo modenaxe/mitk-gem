@@ -19,12 +19,14 @@ void GemPerspective::CreateInitialLayout(berry::IPageLayout::Pointer _layout)
     rightFolder->AddView("org.mitk.views.voxelmasktopolygonmesh");
     rightFolder->AddView("org.mitk.views.volumemesher");
     rightFolder->AddView("org.mitk.views.materialmapping");
+    rightFolder->AddView("ch.zhaw.ugvisualization");
 
     auto bottomRightFolder = _layout->CreateFolder("bottomright", berry::IPageLayout::BOTTOM, 0.77f, "right");
     bottomRightFolder->AddView("org.mitk.views.imagecropper");
     bottomRightFolder->AddView("org.mitk.views.paddingview");
     bottomRightFolder->AddView("org.mitk.views.resampleview");
     bottomRightFolder->AddView("org.mitk.views.remeshing");
+    bottomRightFolder->AddView("org.mitk.views.dicominspector");
 
     auto bottomFolder = _layout->CreatePlaceholderFolder("bottom", berry::IPageLayout::BOTTOM, 0.55f, editorArea);
     bottomFolder->AddPlaceholder("org.blueberry.views.logview");

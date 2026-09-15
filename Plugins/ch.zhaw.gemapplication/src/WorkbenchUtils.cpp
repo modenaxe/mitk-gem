@@ -8,8 +8,14 @@
 #include <mitkImageAccessByItk.h>
 #include <mitkITKImageImport.h>
 #include <mitkUnstructuredGrid.h>
+#include <mitkGridRepresentationProperty.h>
 #include <mitkMapper.h>
+#include <mitkProperties.h>
+#include <mitkUnstructuredGridMapper2D.h>
+#include <mitkUnstructuredGridVtkMapper3D.h>
 #include <mitkVtkMapper.h>
+#include <mitkVtkGLMapperWrapper.h>
+#include <mitkVtkScalarModeProperty.h>
 
 #include <itkConstantPadImageFilter.h>
 #include <itkIdentityTransform.h>
@@ -20,9 +26,13 @@
 #include <itkResampleImageFilter.h>
 
 #include <vtkAssembly.h>
+#include <vtkDataArray.h>
 #include <vtkCellData.h>
+#include <vtkMapper.h>
 #include <vtkUnstructuredGrid.h>
 #include <vtkProp3DCollection.h>
+
+#include <cmath>
 
 using namespace mitk;
 
@@ -95,6 +105,79 @@ NodePredicateDataType::Pointer WorkbenchUtils::createIsUnstructuredGridTypePredi
 
 NodePredicateDataType::Pointer WorkbenchUtils::createIsSurfaceTypePredicate() {
     return NodePredicateDataType::New("Surface");
+}
+
+void WorkbenchUtils::configureUnstructuredGridForRendering(mitk::DataNode::Pointer node)
+{
+    if (node.IsNull() || dynamic_cast<mitk::UnstructuredGrid*>(node->GetData()) == nullptr)
+    {
+        return;
+    }
+
+    if (node->GetMapper(mitk::BaseRenderer::Standard2D) == nullptr)
+    {
+        node->SetMapper(mitk::BaseRenderer::Standard2D,
+                        mitk::VtkGLMapperWrapper::New(mitk::UnstructuredGridMapper2D::New().GetPointer()));
+    }
+    if (node->GetMapper(mitk::BaseRenderer::Standard3D) == nullptr)
+    {
+        node->SetMapper(mitk::BaseRenderer::Standard3D, mitk::UnstructuredGridVtkMapper3D::New());
+    }
+
+    // MITK creates GridRepresentationProperty in WIREFRAME mode. GEM's volume
+    // meshes should instead open as filled exterior surfaces; the UGrid view
+    // remains available for volume rendering and section visualisation.
+    mitk::UnstructuredGridVtkMapper3D::SetDefaultProperties(node, nullptr, false);
+    node->SetProperty("grid representation",
+                      mitk::GridRepresentationProperty::New(mitk::GridRepresentationProperty::SURFACE));
+    node->SetProperty("volumerendering", mitk::BoolProperty::New(false));
+    node->SetProperty("outline polygons", mitk::BoolProperty::New(true));
+
+    auto* renderer = mitk::BaseRenderer::GetInstance(
+        mitk::BaseRenderer::GetRenderWindowByName("stdmulti.widget4"));
+    if (renderer != nullptr)
+    {
+        node->AddProperty("material.specularCoefficient", mitk::FloatProperty::New(0.0f), renderer, true);
+    }
+}
+
+bool WorkbenchUtils::activateUnstructuredGridCellData(mitk::DataNode::Pointer node,
+                                                       const std::string& arrayName)
+{
+    if (node.IsNull())
+    {
+        return false;
+    }
+
+    auto* mesh = dynamic_cast<mitk::UnstructuredGrid*>(node->GetData());
+    auto* grid = mesh == nullptr ? nullptr : mesh->GetVtkUnstructuredGrid();
+    auto* cellData = grid == nullptr ? nullptr : grid->GetCellData();
+    auto* array = cellData == nullptr ? nullptr : cellData->GetArray(arrayName.c_str());
+    if (array == nullptr || array->GetNumberOfComponents() != 1)
+    {
+        return false;
+    }
+
+    const auto* range = array->GetRange();
+    if (range == nullptr || !std::isfinite(range[0]) || !std::isfinite(range[1]))
+    {
+        return false;
+    }
+
+    if (cellData->SetActiveScalars(arrayName.c_str()) < 0)
+    {
+        return false;
+    }
+
+    auto scalarMode = mitk::VtkScalarModeProperty::New();
+    scalarMode->SetScalarModeToCellData();
+    node->SetProperty("scalar mode", scalarMode);
+    node->SetProperty("scalar visibility", mitk::BoolProperty::New(true));
+    node->SetProperty("TransferFunction", createColorTransferFunction(range[0], range[1]));
+
+    grid->Modified();
+    mesh->Modified();
+    return true;
 }
 
 unsigned int WorkbenchUtils::convertToItkAxis(Axis axis) {

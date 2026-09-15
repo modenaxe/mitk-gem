@@ -12,6 +12,7 @@ set(enabled_modules
   GraphAlgorithms
   DICOM
   DICOMQI
+  DICOMUI
   Forms
   FormsUI
   ImageDenoising
@@ -27,6 +28,8 @@ set(enabled_modules
   QtWidgets
   QtWidgetsExt
   Remeshing
+  RT
+  RTUI
   SceneSerialization
   SceneSerializationBase
   Segmentation
@@ -49,6 +52,8 @@ set(enabled_plugins
   "org.mitk.gui.qt.basicimageprocessing"
   "org.mitk.gui.qt.common"
   "org.mitk.gui.qt.datamanager"
+  "org.mitk.gui.qt.dicombrowser"
+  "org.mitk.gui.qt.dicominspector"
   "org.mitk.gui.qt.extapplication"
   "org.mitk.gui.qt.ext"
   "org.mitk.gui.qt.imagecropper"

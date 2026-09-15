@@ -315,6 +315,9 @@ void MaterialMappingView::onMaterialMappingFinished()
             newNode->SetData(result.mesh);
             newNode->SetProperty("name", mitk::StringProperty::New("material mapped mesh"));
             newNode->SetProperty("layer", mitk::IntProperty::New(1));
+            WorkbenchUtils::configureUnstructuredGridForRendering(newNode);
+            WorkbenchUtils::activateUnstructuredGridCellData(
+                newNode, gem::io::GetMaterialArrayName(gem::io::MaterialMappingMethod::MethodA));
             GetDataStorage()->Add(newNode);
             m_Controls.exportMeshComboBox->SetSelectedNode(newNode);
             updateExportControls();

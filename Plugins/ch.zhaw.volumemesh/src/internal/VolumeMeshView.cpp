@@ -243,6 +243,7 @@ void VolumeMeshView::onMeshingFinished()
             newNode->SetData(result.mesh);
             newNode->SetProperty("name", mitk::StringProperty::New("tetrahedral mesh"));
             newNode->SetProperty("layer", mitk::IntProperty::New(1));
+            WorkbenchUtils::configureUnstructuredGridForRendering(newNode);
             GetDataStorage()->Add(newNode);
         }
         catch (const mitk::Exception& exception)

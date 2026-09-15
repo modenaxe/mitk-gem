@@ -76,6 +76,20 @@ public:
      */
     static mitk::NodePredicateDataType::Pointer createIsSurfaceTypePredicate();
 
+    /**
+     * Attach MITK's unstructured-grid mappers and a filled-surface default to
+     * a newly created volume-mesh node. MITK otherwise initializes grids in
+     * wireframe mode, which hides mapped element values behind every edge.
+     */
+    static void configureUnstructuredGridForRendering(mitk::DataNode::Pointer node);
+
+    /**
+     * Select a scalar cell-data array and configure the node for coloured
+     * element-value rendering. Returns false if the named array is absent or
+     * does not have a finite scalar range.
+     */
+    static bool activateUnstructuredGridCellData(mitk::DataNode::Pointer node, const std::string& arrayName);
+
     /*!
      * Add padding slices to the image. This involves quite a bit of casting magic in order to keep all image types as they are.
      * Only works with pixel types and dimension defined in the CMake variable MITK_ACCESSBYITK_* in the MITK build.

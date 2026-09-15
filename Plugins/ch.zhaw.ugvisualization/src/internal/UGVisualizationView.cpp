@@ -169,6 +169,16 @@ void UGVisualizationView::SelectUG(mitk::UnstructuredGrid::Pointer _ugrid, mitk:
     m_Controls.renderingCheckbox->setEnabled(true);
     m_Controls.renderingCheckbox->setChecked(has3DMapper);
     m_Controls.m_ContainerWidget->setEnabled(has3DMapper);
+
+    // Material mapping stores its values as cell data. Preserve that intent
+    // when opening this view instead of presenting an empty point-data list.
+    {
+        QSignalBlocker blockSignals(m_Controls.scalarModeComboBox);
+        auto* grid = _ugrid->GetVtkUnstructuredGrid();
+        const bool hasActiveCellScalars = grid != nullptr && grid->GetCellData() != nullptr
+          && grid->GetCellData()->GetScalars() != nullptr;
+        m_Controls.scalarModeComboBox->setCurrentIndex(hasActiveCellScalars ? 1 : 0);
+    }
     UpdateFieldDataComboBoxes(_ugrid);
 
     if(has3DMapper){
