@@ -179,8 +179,15 @@ list(PREPEND CMAKE_PREFIX_PATH
 # them before importing MITK so the imported link interfaces are complete.
 find_package(Boost 1.74 REQUIRED)
 find_package(OpenGL REQUIRED)
-find_package(OpenMP QUIET COMPONENTS CXX)
-if(NOT TARGET OpenMP::OpenMP_CXX)
+if(MSVC)
+  find_package(OpenMP QUIET COMPONENTS CXX)
+else()
+  # MITK's exported targets reference OpenMP::OpenMP_CXX on Unix platforms.
+  # Require a real implementation there: GCC provides it on Linux, while CI
+  # supplies Homebrew libomp for Apple Clang.
+  find_package(OpenMP REQUIRED COMPONENTS CXX)
+endif()
+if(MSVC AND NOT TARGET OpenMP::OpenMP_CXX)
   # The MITK 2025.12.2 build was configured with MSVC's -openmp option but its
   # exported package does not rediscover OpenMP for consumers.  Recreate the
   # equivalent header-only CMake target; MSVC requires no extra link library.

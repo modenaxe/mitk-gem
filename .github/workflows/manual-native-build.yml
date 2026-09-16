@@ -7,7 +7,7 @@ on:
       platform:
         description: Platform to build
         required: true
-        default: windows
+        default: all
         type: choice
         options:
           - windows
@@ -63,12 +63,12 @@ jobs:
           REQUESTED_UPLOAD_ARTIFACT: ${{ github.event.inputs.upload_artifact }}
         run: |
           if [ "$GITHUB_EVENT_NAME" = "push" ]; then
-            REQUESTED_PLATFORM=windows
+            REQUESTED_PLATFORM=all
             REQUESTED_BUILD_TYPE=Release
             REQUESTED_UPLOAD_ARTIFACT=true
           fi
 
-          : "${REQUESTED_PLATFORM:=windows}"
+          : "${REQUESTED_PLATFORM:=all}"
           : "${REQUESTED_BUILD_TYPE:=Release}"
           : "${REQUESTED_UPLOAD_ARTIFACT:=true}"
           echo "build_type=$REQUESTED_BUILD_TYPE" >> "$GITHUB_OUTPUT"
@@ -142,9 +142,10 @@ jobs:
         if: matrix.id == 'macos'
         shell: bash
         run: |
-          brew install cgal openssl@3 ninja
+          brew install cgal libomp openssl@3 ninja
           echo "CGAL_DIR=$(brew --prefix cgal)/lib/cmake/CGAL" >> "$GITHUB_ENV"
           echo "MITK_OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)" >> "$GITHUB_ENV"
+          echo "OpenMP_ROOT=$(brew --prefix libomp)" >> "$GITHUB_ENV"
 
       - name: Restore OpenSSL 3.0 installer cache
         if: matrix.id == 'windows'
@@ -300,6 +301,7 @@ jobs:
             -DCGAL_DIR:PATH="$CGAL_DIR" \
             -DMITK_SOURCE_DIR:PATH="$MITK_SOURCE_DIR" \
             -DMITK_OPENSSL_ROOT_DIR:PATH="$MITK_OPENSSL_ROOT_DIR" \
+            -DOpenMP_ROOT:PATH="${OpenMP_ROOT:-}" \
             -DMITK-GEM_USE_SUPERBUILD:BOOL=ON \
             -DBUILD_TESTING:BOOL=OFF \
             -DMITK_GEM_BUILD_FEM_EXPORT_TESTS:BOOL=ON \
