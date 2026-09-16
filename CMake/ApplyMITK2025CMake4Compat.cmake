@@ -605,6 +605,10 @@ if(mitk_ugrid_section_patch_already_applied EQUAL -1)
               static_cast<float>(m_ScalarsToOpacity->GetValue(scalar)));
   };
 
+  // MITK-GEM patch: preserve OpenGL state for the image and overlay mappers
+  // which render after this legacy 2D mapper.
+  glPushAttrib(GL_COLOR_BUFFER_BIT | GL_CURRENT_BIT | GL_ENABLE_BIT | GL_LINE_BIT | GL_POLYGON_BIT);
+
   glLineWidth(static_cast<float>(m_LineWidth->GetValue()));
 
   for (int i = 0; i < numberOfLines; ++i)
@@ -695,6 +699,7 @@ if(mitk_ugrid_section_patch_already_applied EQUAL -1)
     }
   }
   glDisable(GL_BLEND);
+  glPopAttrib();
 ]=])
 
   string(FIND "${mitk_ugrid_mapper2d_normalized_contents}"
@@ -715,6 +720,63 @@ if(mitk_ugrid_section_patch_already_applied EQUAL -1)
   message(STATUS "Applied MITK v2025.12.2 UGrid 2D section-rendering patch")
 else()
   message(STATUS "MITK v2025.12.2 UGrid 2D section-rendering patch is already applied")
+endif()
+
+# The UGrid section-rendering patch above originally extended the legacy
+# OpenGL mapper with field-data support.  Its outline pass switches the global
+# polygon mode to GL_LINE, however, and the old mapper did not restore it.
+# Rendering then leaks into following mappers: a medical-image slice is drawn
+# as an empty outline on the next frame and appears to disappear after volume
+# meshing.  Preserve the relevant state around the legacy mapper so image
+# slices, crosshairs, and other overlays are unaffected.  This separate,
+# idempotent step also upgrades source trees where the earlier field-data patch
+# has already been applied.
+set(mitk_ugrid_gl_state_patch_marker
+  "// MITK-GEM patch: preserve OpenGL state for the image and overlay mappers")
+string(FIND "${mitk_ugrid_mapper2d_normalized_contents}"
+  "${mitk_ugrid_gl_state_patch_marker}" mitk_ugrid_gl_state_patch_already_applied)
+
+if(mitk_ugrid_gl_state_patch_already_applied EQUAL -1)
+  set(mitk_ugrid_gl_state_anchor
+    "  // MITK-GEM patch: correctly colour UGrid sections from active point or cell scalars.\n")
+  string(FIND "${mitk_ugrid_mapper2d_normalized_contents}"
+    "${mitk_ugrid_gl_state_anchor}" mitk_ugrid_gl_state_anchor_location)
+  if(mitk_ugrid_gl_state_anchor_location EQUAL -1)
+    message(FATAL_ERROR
+      "The expected MITK-GEM UGrid section-rendering patch context was not found; refusing to patch an unknown source revision")
+  endif()
+
+  string(REPLACE "${mitk_ugrid_gl_state_anchor}"
+    "${mitk_ugrid_gl_state_anchor}\n  // MITK-GEM patch: preserve OpenGL state for the image and overlay mappers\n  // which render after this legacy 2D mapper.\n  glPushAttrib(GL_COLOR_BUFFER_BIT | GL_CURRENT_BIT | GL_ENABLE_BIT | GL_LINE_BIT | GL_POLYGON_BIT);\n"
+    mitk_ugrid_mapper2d_normalized_contents "${mitk_ugrid_mapper2d_normalized_contents}")
+
+  set(mitk_ugrid_gl_state_end_anchor [=[  glDisable(GL_BLEND);
+}
+
+vtkAbstractMapper3D *mitk::UnstructuredGridMapper2D::GetVtkAbstractMapper3D]=])
+  set(mitk_ugrid_gl_state_end_patched [=[  glDisable(GL_BLEND);
+  glPopAttrib();
+}
+
+vtkAbstractMapper3D *mitk::UnstructuredGridMapper2D::GetVtkAbstractMapper3D]=])
+  string(FIND "${mitk_ugrid_mapper2d_normalized_contents}"
+    "${mitk_ugrid_gl_state_end_anchor}" mitk_ugrid_gl_state_end_location)
+  if(mitk_ugrid_gl_state_end_location EQUAL -1)
+    message(FATAL_ERROR
+      "The expected MITK UGrid 2D mapper end context was not found; refusing to patch an unknown source revision")
+  endif()
+  string(REPLACE "${mitk_ugrid_gl_state_end_anchor}" "${mitk_ugrid_gl_state_end_patched}"
+    mitk_ugrid_mapper2d_normalized_contents "${mitk_ugrid_mapper2d_normalized_contents}")
+
+  if(NOT mitk_ugrid_mapper2d_uses_crlf EQUAL -1)
+    string(REPLACE "\n" "\r\n" mitk_ugrid_mapper2d_contents "${mitk_ugrid_mapper2d_normalized_contents}")
+  else()
+    set(mitk_ugrid_mapper2d_contents "${mitk_ugrid_mapper2d_normalized_contents}")
+  endif()
+  file(WRITE "${mitk_ugrid_mapper2d_file}" "${mitk_ugrid_mapper2d_contents}")
+  message(STATUS "Applied MITK v2025.12.2 UGrid 2D OpenGL-state restoration patch")
+else()
+  message(STATUS "MITK v2025.12.2 UGrid 2D OpenGL-state restoration patch is already applied")
 endif()
 
 # MITK opens a first-run startup dialog after constructing the workbench.  It
