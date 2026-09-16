@@ -11,10 +11,8 @@
 #include <mitkGridRepresentationProperty.h>
 #include <mitkMapper.h>
 #include <mitkProperties.h>
-#include <mitkUnstructuredGridMapper2D.h>
 #include <mitkUnstructuredGridVtkMapper3D.h>
 #include <mitkVtkMapper.h>
-#include <mitkVtkGLMapperWrapper.h>
 #include <mitkVtkScalarModeProperty.h>
 
 #include <itkConstantPadImageFilter.h>
@@ -114,24 +112,20 @@ void WorkbenchUtils::configureUnstructuredGridForRendering(mitk::DataNode::Point
         return;
     }
 
-    if (node->GetMapper(mitk::BaseRenderer::Standard2D) == nullptr)
-    {
-        node->SetMapper(mitk::BaseRenderer::Standard2D,
-                        mitk::VtkGLMapperWrapper::New(mitk::UnstructuredGridMapper2D::New().GetPointer()));
-    }
     if (node->GetMapper(mitk::BaseRenderer::Standard3D) == nullptr)
     {
         node->SetMapper(mitk::BaseRenderer::Standard3D, mitk::UnstructuredGridVtkMapper3D::New());
     }
 
     // MITK creates GridRepresentationProperty in WIREFRAME mode. GEM's volume
-    // meshes should instead open as filled exterior surfaces; the UGrid view
-    // remains available for volume rendering and section visualisation.
+    // meshes should instead open as filled exterior surfaces. Do not attach
+    // the legacy 2D section mapper here: it is an optional UGrid-view feature
+    // and must not affect the normal medical-image slice display.
     mitk::UnstructuredGridVtkMapper3D::SetDefaultProperties(node, nullptr, false);
     node->SetProperty("grid representation",
                       mitk::GridRepresentationProperty::New(mitk::GridRepresentationProperty::SURFACE));
     node->SetProperty("volumerendering", mitk::BoolProperty::New(false));
-    node->SetProperty("outline polygons", mitk::BoolProperty::New(true));
+    node->SetProperty("outline polygons", mitk::BoolProperty::New(false));
 
     auto* renderer = mitk::BaseRenderer::GetInstance(
         mitk::BaseRenderer::GetRenderWindowByName("stdmulti.widget4"));

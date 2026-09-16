@@ -77,9 +77,12 @@ public:
     static mitk::NodePredicateDataType::Pointer createIsSurfaceTypePredicate();
 
     /**
-     * Attach MITK's unstructured-grid mappers and a filled-surface default to
-     * a newly created volume-mesh node. MITK otherwise initializes grids in
+     * Attach MITK's 3D unstructured-grid mapper and a filled-surface default
+     * to a newly created volume-mesh node. MITK otherwise initializes grids in
      * wireframe mode, which hides mapped element values behind every edge.
+     * The optional 2D section mapper is controlled explicitly by the UGrid
+     * Visualization view so medical-image slices remain unaffected by mesh
+     * creation.
      */
     static void configureUnstructuredGridForRendering(mitk::DataNode::Pointer node);
 

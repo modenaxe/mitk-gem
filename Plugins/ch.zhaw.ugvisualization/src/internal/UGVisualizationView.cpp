@@ -104,6 +104,7 @@ void UGVisualizationView::SetFocus() {
 void UGVisualizationView::CreateConnections() {
     connect(m_Controls.m_RepresentationComboBox, SIGNAL(activated(int)), this, SLOT(UpdateRenderWindow()));
     connect(m_Controls.renderingCheckbox, SIGNAL(clicked(bool)), this, SLOT(RenderingCheckboxClicked(bool)));
+    connect(m_Controls.sectionsCheckbox, SIGNAL(clicked(bool)), this, SLOT(SectionsCheckboxClicked(bool)));
     connect(m_Controls.scalarModeComboBox, SIGNAL(currentIndexChanged(int)), this, SLOT(ScalarModeSelectionChanged(int)));
     connect(m_Controls.fieldDataComboBox, SIGNAL(currentIndexChanged(int)), this, SLOT(FieldDataSelectionChanged(int)));
 }
@@ -133,6 +134,8 @@ void UGVisualizationView::UpdateGUI() {
     m_Controls.m_ErrorLabel->setVisible(true);
     m_Controls.renderingCheckbox->setChecked(false);
     m_Controls.renderingCheckbox->setEnabled(false);
+    m_Controls.sectionsCheckbox->setChecked(false);
+    m_Controls.sectionsCheckbox->setEnabled(false);
     m_Controls.m_ContainerWidget->setEnabled(false);
 }
 void UGVisualizationView::ResetGUI(){
@@ -156,7 +159,8 @@ void UGVisualizationView::EnsureRenderingProperties(mitk::DataNode::Pointer node
 
 void UGVisualizationView::SelectUG(mitk::UnstructuredGrid::Pointer _ugrid, mitk::DataNode::Pointer _node) {
     m_SelectedNode = _node;
-    bool has3DMapper = _node->GetMapper(mitk::BaseRenderer::Standard3D);
+    const bool has3DMapper = _node->GetMapper(mitk::BaseRenderer::Standard3D) != nullptr;
+    const bool has2DMapper = _node->GetMapper(mitk::BaseRenderer::Standard2D) != nullptr;
 
     if(has3DMapper){
         EnsureRenderingProperties(_node);
@@ -168,6 +172,8 @@ void UGVisualizationView::SelectUG(mitk::UnstructuredGrid::Pointer _ugrid, mitk:
     m_Controls.m_ErrorLabel->setVisible(false);
     m_Controls.renderingCheckbox->setEnabled(true);
     m_Controls.renderingCheckbox->setChecked(has3DMapper);
+    m_Controls.sectionsCheckbox->setEnabled(has3DMapper);
+    m_Controls.sectionsCheckbox->setChecked(has2DMapper);
     m_Controls.m_ContainerWidget->setEnabled(has3DMapper);
 
     // Material mapping stores its values as cell data. Preserve that intent
@@ -222,10 +228,9 @@ void UGVisualizationView::RenderingCheckboxClicked(bool) {
         return;
     }
 
-    bool hasMapper = m_SelectedNode->GetMapper(mitk::BaseRenderer::Standard3D);
-    bool isChecked = m_Controls.renderingCheckbox->isChecked();
+    const bool hasMapper = m_SelectedNode->GetMapper(mitk::BaseRenderer::Standard3D) != nullptr;
+    const bool isChecked = m_Controls.renderingCheckbox->isChecked();
     if(isChecked && !hasMapper){
-        m_SelectedNode->SetMapper(mitk::BaseRenderer::Standard2D, mitk::VtkGLMapperWrapper::New(mitk::UnstructuredGridMapper2D::New().GetPointer()));
         m_SelectedNode->SetMapper(mitk::BaseRenderer::Standard3D, mitk::UnstructuredGridVtkMapper3D::New());
 
         EnsureRenderingProperties(m_SelectedNode);
@@ -233,7 +238,7 @@ void UGVisualizationView::RenderingCheckboxClicked(bool) {
             "grid representation", mitk::GridRepresentationProperty::New(mitk::GridRepresentationProperty::SURFACE));
 
         auto renderer = mitk::BaseRenderer::GetInstance(mitk::BaseRenderer::GetRenderWindowByName("stdmulti.widget4"));
-        m_SelectedNode->SetProperty("outline polygons", mitk::BoolProperty::New(true));
+        m_SelectedNode->SetProperty("outline polygons", mitk::BoolProperty::New(false));
         m_SelectedNode->AddProperty("material.specularCoefficient", mitk::FloatProperty::New(0.0), renderer, true);
     } else if(!isChecked && hasMapper){
         m_SelectedNode->SetMapper(mitk::BaseRenderer::Standard2D, nullptr);
@@ -246,6 +251,27 @@ void UGVisualizationView::RenderingCheckboxClicked(bool) {
     } else {
         UpdateRenderWindow();
     }
+}
+
+void UGVisualizationView::SectionsCheckboxClicked(bool checked) {
+    if(m_SelectedNode.IsNull() || !m_Controls.renderingCheckbox->isChecked()){
+        QSignalBlocker blockSignals(m_Controls.sectionsCheckbox);
+        m_Controls.sectionsCheckbox->setChecked(false);
+        return;
+    }
+
+    const bool has2DMapper = m_SelectedNode->GetMapper(mitk::BaseRenderer::Standard2D) != nullptr;
+    if(checked && !has2DMapper){
+        m_SelectedNode->SetMapper(
+            mitk::BaseRenderer::Standard2D,
+            mitk::VtkGLMapperWrapper::New(mitk::UnstructuredGridMapper2D::New().GetPointer()));
+        m_SelectedNode->SetProperty("outline polygons", mitk::BoolProperty::New(true));
+    } else if(!checked && has2DMapper){
+        m_SelectedNode->SetMapper(mitk::BaseRenderer::Standard2D, nullptr);
+        m_SelectedNode->SetProperty("outline polygons", mitk::BoolProperty::New(false));
+    }
+
+    UpdateRenderWindow();
 }
 
 void UGVisualizationView::ScalarModeSelectionChanged(int) {

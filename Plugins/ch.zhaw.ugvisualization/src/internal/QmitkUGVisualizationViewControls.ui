@@ -84,6 +84,16 @@
     </widget>
    </item>
    <item>
+    <widget class="QCheckBox" name="sectionsCheckbox">
+     <property name="toolTip">
+      <string>Show intersections between this mesh and the medical-image slice planes. This is disabled by default to keep image slices unobstructed.</string>
+     </property>
+     <property name="text">
+      <string>Show 2D mesh sections</string>
+     </property>
+    </widget>
+   </item>
+   <item>
     <widget class="QWidget" name="m_ContainerWidget" native="true">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Preferred" vsizetype="Preferred">

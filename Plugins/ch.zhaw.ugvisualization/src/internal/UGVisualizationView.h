@@ -47,6 +47,7 @@ public:
 protected slots:
     void UpdateRenderWindow();
     void RenderingCheckboxClicked(bool clicked);
+    void SectionsCheckboxClicked(bool clicked);
     void ScalarModeSelectionChanged(int);
     void FieldDataSelectionChanged(int);
 
