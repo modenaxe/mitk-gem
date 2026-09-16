@@ -42,6 +42,7 @@ protected slots:
     void tableDataChanged();
     void unitSelectionChanged(int);
     void updateExportControls();
+    void exportMaterialMethodSelectionChanged(int index);
 #ifdef MITK_GEM_ENABLE_GUI_TESTS
     void compareGrids();
 #endif
@@ -75,6 +76,7 @@ private:
                                             MappingConfiguration configuration);
 
     void updateStartButtonState();
+    void updateExportPreview();
 
 protected:
     Ui::MaterialMappingViewControls m_Controls;

@@ -1333,10 +1333,10 @@ QWidget {
             <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
              <horstretch>0</horstretch>
              <verstretch>0</verstretch>
-            </sizepolicy>
+           </sizepolicy>
            </property>
            <property name="text">
-            <string>Start</string>
+            <string>Map Material Properties</string>
            </property>
           </widget>
          </item>
@@ -1364,8 +1364,11 @@ QWidget {
              </widget>
             </item>
             <item>
-             <widget class="QComboBox" name="exportFormatComboBox">
-              <item>
+            <widget class="QComboBox" name="exportFormatComboBox">
+             <property name="currentIndex">
+              <number>2</number>
+             </property>
+             <item>
                <property name="text">
                 <string>Abaqus input deck (*.inp)</string>
                </property>

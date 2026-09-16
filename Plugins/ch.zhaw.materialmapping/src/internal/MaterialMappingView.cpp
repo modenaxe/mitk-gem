@@ -15,6 +15,7 @@
 #include <mitkNodePredicateAnd.h>
 #include <mitkNodePredicateDataType.h>
 #include <mitkNodePredicateNot.h>
+#include <mitkRenderingManager.h>
 #include <mitkUnstructuredGrid.h>
 #include <tinyxml2.h>
 
@@ -164,6 +165,8 @@ void MaterialMappingView::CreateQtPartControl(QWidget *parent) {
             this, [this](const mitk::DataNode*) { updateExportControls(); });
     connect(m_Controls.exportFormatComboBox, SIGNAL(currentIndexChanged(int)),
             this, SLOT(updateExportControls()));
+    connect(m_Controls.exportMaterialMethodComboBox, SIGNAL(currentIndexChanged(int)),
+            this, SLOT(exportMaterialMethodSelectionChanged(int)));
     connect(m_Controls.exportFemButton, SIGNAL(clicked()), this, SLOT(exportFemModelClicked()));
     connect(&m_WorkerWatcher, &QFutureWatcher<MappingResult>::finished,
             this, &MaterialMappingView::onMaterialMappingFinished, Qt::QueuedConnection);
@@ -426,7 +429,7 @@ void MaterialMappingView::updateExportControls()
     {
         const auto addMethodIfAvailable = [this, grid](gem::io::MaterialMappingMethod method, const QString& label) {
             if (grid->GetCellData()->GetArray(gem::io::GetMaterialArrayName(method)) != nullptr)
-                m_Controls.exportMaterialMethodComboBox->addItem(label);
+                m_Controls.exportMaterialMethodComboBox->addItem(label, static_cast<int>(method));
         };
         addMethodIfAvailable(gem::io::MaterialMappingMethod::MethodA, "Method A");
         addMethodIfAvailable(gem::io::MaterialMappingMethod::MethodB, "Method B");
@@ -438,6 +441,8 @@ void MaterialMappingView::updateExportControls()
     if (previousMethodIndex >= 0)
         m_Controls.exportMaterialMethodComboBox->setCurrentIndex(previousMethodIndex);
     m_Controls.exportMaterialMethodComboBox->blockSignals(false);
+
+    updateExportPreview();
 
     std::string reason;
     const bool meshIsExportable = grid != nullptr
@@ -465,6 +470,47 @@ void MaterialMappingView::updateExportControls()
             ? "FEBio exports the selected continuous element material map."
             : "Abaqus and ANSYS discretize the selected element material map into material cards.");
     }
+}
+
+void MaterialMappingView::exportMaterialMethodSelectionChanged(int)
+{
+    updateExportPreview();
+}
+
+void MaterialMappingView::updateExportPreview()
+{
+    const auto meshNode = m_Controls.exportMeshComboBox->GetSelectedNode();
+    if (meshNode == nullptr)
+    {
+        return;
+    }
+
+    const auto methodData = m_Controls.exportMaterialMethodComboBox->currentData();
+    if (!methodData.isValid())
+    {
+        return;
+    }
+
+    const auto method = static_cast<gem::io::MaterialMappingMethod>(methodData.toInt());
+    if (method != gem::io::MaterialMappingMethod::MethodA
+        && method != gem::io::MaterialMappingMethod::MethodB
+        && method != gem::io::MaterialMappingMethod::MethodE)
+    {
+        return;
+    }
+
+    // FEM export and the 3D preview deliberately share one material-map
+    // selection. This lets the user inspect exactly the field that will be
+    // written, including FEBio's Method E when available.
+    WorkbenchUtils::configureUnstructuredGridForRendering(meshNode);
+    if (!WorkbenchUtils::activateUnstructuredGridCellData(
+            meshNode, gem::io::GetMaterialArrayName(method)))
+    {
+        return;
+    }
+
+    meshNode->SetVisibility(true);
+    mitk::RenderingManager::GetInstance()->RequestUpdateAll();
 }
 
 void MaterialMappingView::exportFemModelClicked()

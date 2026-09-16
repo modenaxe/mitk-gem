@@ -169,6 +169,18 @@ bool WorkbenchUtils::activateUnstructuredGridCellData(mitk::DataNode::Pointer no
     node->SetProperty("scalar visibility", mitk::BoolProperty::New(true));
     node->SetProperty("TransferFunction", createColorTransferFunction(range[0], range[1]));
 
+    // The node properties are the durable rendering configuration. Apply the
+    // selection to an already-created VTK actor as well, so a material-map
+    // change is visible immediately rather than waiting for the actor to be
+    // recreated by a later render pass.
+    if (auto* actor = getVtk3dActor(node); actor != nullptr && actor->GetMapper() != nullptr)
+    {
+        actor->GetMapper()->SetScalarModeToUseCellData();
+        actor->GetMapper()->SetScalarVisibility(true);
+        actor->GetMapper()->SelectColorArray(arrayName.c_str());
+        actor->GetMapper()->Modified();
+    }
+
     grid->Modified();
     mesh->Modified();
     return true;
@@ -326,7 +338,15 @@ void WorkbenchUtils::resampleImageItk(itk::Image <PixelType, ImageDimension> *it
 }
 
 vtkActor* WorkbenchUtils::getVtk3dActor(mitk::DataNode::Pointer _node){
+    if (_node.IsNull()) {
+        return nullptr;
+    }
+
     auto renderer = mitk::BaseRenderer::GetInstance(mitk::BaseRenderer::GetRenderWindowByName("stdmulti.widget4"));
+    if (renderer == nullptr) {
+        return nullptr;
+    }
+
     mitk::VtkMapper::Pointer mapper = dynamic_cast<mitk::VtkMapper*>(_node->GetMapper(mitk::BaseRenderer::Standard3D));
     if (mapper.IsNull()) {
         return nullptr;
