@@ -1104,6 +1104,47 @@ QWidget {
           </widget>
          </item>
          <item>
+          <widget class="QGroupBox" name="methodInfoGroup">
+           <property name="title">
+            <string>Material mapping methods</string>
+           </property>
+           <layout class="QVBoxLayout" name="methodInfoLayout">
+            <property name="leftMargin">
+             <number>6</number>
+            </property>
+            <property name="topMargin">
+             <number>10</number>
+            </property>
+            <property name="rightMargin">
+             <number>6</number>
+            </property>
+            <property name="bottomMargin">
+             <number>5</number>
+            </property>
+            <item>
+             <widget class="QLabel" name="methodInfoLabel">
+              <property name="text">
+               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;
+&lt;p&gt;Every mapping run creates all five fields. Element data are stored on mesh cells; point data are stored on mesh nodes.&lt;/p&gt;
+&lt;p&gt;&lt;b&gt;Method A — Element data&lt;/b&gt;&lt;br/&gt;No erosion, followed by three material-extension steps. Nodal interpolation is converted to one Young's modulus per element.&lt;/p&gt;
+&lt;p&gt;&lt;b&gt;Method B — Element data&lt;/b&gt;&lt;br/&gt;One erosion/peel step, followed by three material-extension steps. Element values are derived from the Method C nodal field.&lt;/p&gt;
+&lt;p&gt;&lt;b&gt;Method C — Point data&lt;/b&gt;&lt;br/&gt;One erosion/peel step and three material-extension steps. Young's modulus is retained at the mesh nodes.&lt;/p&gt;
+&lt;p&gt;&lt;b&gt;Method D — Point data&lt;/b&gt;&lt;br/&gt;Currently an exact copy of Method C. No separate cortical assignment is applied by MITK-GEM.&lt;/p&gt;
+&lt;p&gt;&lt;b&gt;Method E — Element data&lt;/b&gt;&lt;br/&gt;Currently an exact copy of Method A. MITK-GEM does not generate a separate shell model for this field.&lt;/p&gt;
+&lt;/body&gt;&lt;/html&gt;</string>
+              </property>
+              <property name="textFormat">
+               <enum>Qt::RichText</enum>
+              </property>
+              <property name="wordWrap">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
           <widget class="QGroupBox" name="optionsGroup">
            <property name="title">
             <string>Options</string>
@@ -1174,10 +1215,10 @@ QWidget {
               <item row="4" column="1">
                <widget class="QLabel" name="label_3">
                 <property name="toolTip">
-                 <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;The minimum modulus E assigned to the output. All values smaller are clipped to this minimum.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+                 <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Lower bound applied to interpolated Young's modulus before element values are calculated. Values below it are clamped. A value of 0 disables the floor. Units are those produced by the selected power law, typically MPa.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
                 </property>
                 <property name="text">
-                 <string>Minimum element data value for E.</string>
+                 <string>Minimum Young's modulus (E).</string>
                 </property>
                 <property name="wordWrap">
                  <bool>true</bool>
@@ -1218,8 +1259,14 @@ QWidget {
               </item>
               <item row="5" column="1">
                <widget class="QLabel" name="label_18">
+                <property name="toolTip">
+                 <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Reproduces the published legacy implementation: a slice-oriented 3x3x1 erosion kernel and the original weighted 3-D surface-extension routine.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+                </property>
                 <property name="text">
-                 <string>Current method (as published).</string>
+                 <string>Current method (published legacy algorithm).</string>
+                </property>
+                <property name="wordWrap">
+                 <bool>true</bool>
                 </property>
                </widget>
               </item>
@@ -1244,7 +1291,7 @@ QWidget {
                  </size>
                 </property>
                 <property name="toolTip">
-                 <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;The minimum modulus E assigned to the output. All values smaller are clipped to this minimum.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+                 <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Lower bound applied to interpolated Young's modulus before element values are calculated. Values below it are clamped. A value of 0 disables the floor. Units are those produced by the selected power law, typically MPa.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
                 </property>
                 <property name="minimum">
                  <double>0.000000000000000</double>
@@ -1266,8 +1313,14 @@ QWidget {
               </item>
               <item row="6" column="1">
                <widget class="QLabel" name="label_17">
+                <property name="toolTip">
+                 <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Uses a full 3x3x3 erosion kernel and a VTK-based weighted 3-D material extension. This is the software default, but it has not been independently validated as equivalent to the published method.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+                </property>
                 <property name="text">
-                 <string>Improved method.</string>
+                 <string>Improved method (full 3-D neighbourhood).</string>
+                </property>
+                <property name="wordWrap">
+                 <bool>true</bool>
                 </property>
                </widget>
               </item>
@@ -1338,81 +1391,6 @@ QWidget {
            <property name="text">
             <string>Map Material Properties</string>
            </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QGroupBox" name="femExportGroup">
-           <property name="title">
-            <string>FEM export</string>
-           </property>
-           <layout class="QVBoxLayout" name="femExportLayout">
-            <item>
-             <widget class="QLabel" name="exportMeshLabel">
-              <property name="text">
-               <string>Material-mapped volume mesh</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QmitkDataStorageComboBox" name="exportMeshComboBox"/>
-            </item>
-            <item>
-             <widget class="QLabel" name="exportFormatLabel">
-              <property name="text">
-               <string>Format</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-            <widget class="QComboBox" name="exportFormatComboBox">
-             <property name="currentIndex">
-              <number>2</number>
-             </property>
-             <item>
-               <property name="text">
-                <string>Abaqus input deck (*.inp)</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>ANSYS Mechanical APDL (*.cdb)</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>FEBio model (*.feb)</string>
-               </property>
-              </item>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLabel" name="exportMaterialMethodLabel">
-              <property name="text">
-               <string>Material map</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QComboBox" name="exportMaterialMethodComboBox"/>
-            </item>
-            <item>
-             <widget class="QLabel" name="exportStatusLabel">
-              <property name="wordWrap">
-               <bool>true</bool>
-              </property>
-              <property name="text">
-               <string>Select a material-mapped volume mesh to export.</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QToolButton" name="exportFemButton">
-              <property name="text">
-               <string>Export mapped FEM model...</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
           </widget>
          </item>
          <item>

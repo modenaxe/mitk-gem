@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>FemExportViewControls</class>
+ <widget class="QWidget" name="FemExportViewControls">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>420</width>
+    <height>620</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>FEM Export</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">QGroupBox {
+ border-width: 1px;
+ border-style: solid;
+ border-color: grey;
+ border-radius: 5px;
+ margin-top: 1.7ex;
+}
+
+QGroupBox::title {
+ subcontrol-origin: margin;
+ subcontrol-position: top center;
+ padding: 5px 10px;
+}</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QLabel" name="descriptionLabel">
+     <property name="text">
+      <string>Select a mapped volume mesh, choose the element material field to preview, and export it as a solver-ready FEM model.</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="femExportGroup">
+     <property name="title">
+      <string>FEM export</string>
+     </property>
+     <layout class="QVBoxLayout" name="femExportLayout">
+      <item>
+       <widget class="QLabel" name="exportMeshLabel">
+        <property name="text">
+         <string>Material-mapped volume mesh</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QmitkDataStorageComboBox" name="exportMeshComboBox"/>
+      </item>
+      <item>
+       <widget class="QLabel" name="exportFormatLabel">
+        <property name="text">
+         <string>Format</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QComboBox" name="exportFormatComboBox">
+        <property name="currentIndex">
+         <number>2</number>
+        </property>
+        <item>
+         <property name="text">
+          <string>Abaqus input deck (*.inp)</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>ANSYS Mechanical APDL (*.cdb)</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>FEBio model (*.feb)</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="exportMaterialMethodLabel">
+        <property name="text">
+         <string>Element material map</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QComboBox" name="exportMaterialMethodComboBox"/>
+      </item>
+      <item>
+       <widget class="QLabel" name="previewHintLabel">
+        <property name="text">
+         <string>Changing the material map also updates the 3D preview.</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="exportStatusLabel">
+        <property name="text">
+         <string>Select a material-mapped volume mesh to export.</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="exportFemButton">
+        <property name="text">
+         <string>Export mapped FEM model...</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <layoutdefault spacing="6" margin="11"/>
+ <customwidgets>
+  <customwidget>
+   <class>QmitkDataStorageComboBox</class>
+   <extends>QComboBox</extends>
+   <header location="global">QmitkDataStorageComboBox.h</header>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

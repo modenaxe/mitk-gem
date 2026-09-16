@@ -19,6 +19,7 @@ void GemPerspective::CreateInitialLayout(berry::IPageLayout::Pointer _layout)
     rightFolder->AddView("org.mitk.views.voxelmasktopolygonmesh");
     rightFolder->AddView("org.mitk.views.volumemesher");
     rightFolder->AddView("org.mitk.views.materialmapping");
+    rightFolder->AddView("org.mitk.views.femexport");
     rightFolder->AddView("ch.zhaw.ugvisualization");
 
     auto bottomRightFolder = _layout->CreateFolder("bottomright", berry::IPageLayout::BOTTOM, 0.77f, "right");

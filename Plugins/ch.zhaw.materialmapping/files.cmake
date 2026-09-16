@@ -7,6 +7,7 @@ set(INTERNAL_CPP_FILES
   BoneDensityParameters.cpp
   BoneDensityFunctor.cpp
   CalibrationDataModel.cpp
+  FemExportView.cpp
   GuiHelpers.cpp
   MaterialMappingFilter.cpp
   MaterialMappingHelper.cpp
@@ -29,12 +30,14 @@ if(BUILD_TESTING)
 endif()
 
 set(UI_FILES
+  src/internal/FemExportViewControls.ui
   src/internal/MaterialMappingViewControls.ui
 )
 
 set(MOC_H_FILES
   src/internal/ch_zhaw_materialmapping_Activator.h
   src/internal/CalibrationDataModel.h
+  src/internal/FemExportView.h
   src/internal/MaterialMappingView.h
   src/internal/PowerLawWidget.h
   src/internal/PowerLawWidgetManager.h

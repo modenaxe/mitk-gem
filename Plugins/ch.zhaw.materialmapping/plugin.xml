@@ -6,6 +6,10 @@
           name="Material Mapping"
           class="MaterialMappingView"
           icon="resources/icon.png" />
+    <view id="org.mitk.views.femexport"
+          name="FEM Export"
+          class="FemExportView"
+          icon="resources/icon.png" />
   </extension>
 
 </plugin>

@@ -1,4 +1,6 @@
 #include <cassert>
+#include <string>
+
 #include "GuiHelpers.h"
 
 BoneDensityFunctor gui::createDensityFunctor(Ui::MaterialMappingViewControls &_controls, CalibrationDataModel &_dataModel) {
@@ -130,6 +132,7 @@ tinyxml2::XMLElement *gui::serializeOptionsGroupStateToXml(Ui::MaterialMappingVi
     root->SetAttribute("doPeel", _controls.uParamCheckBox->isChecked());
     root->SetAttribute("numberOfExtends", _controls.eParamSpinBox->value());
     root->SetAttribute("minValue", _controls.fParamSpinBox->value());
+    root->SetAttribute("algorithm", _controls.oldMethodRadioButton->isChecked() ? "current" : "improved");
 
     return root;
 }
@@ -152,5 +155,18 @@ void gui::loadOptionsGroupStateFromXml(Ui::MaterialMappingViewControls &_control
     ret = _root->QueryDoubleAttribute("minValue", &d);
     if (ret == tinyxml2::XML_SUCCESS) {
         _controls.fParamSpinBox->setValue(d);
+    }
+
+    // Parameter files created before the algorithm attribute was introduced
+    // keep the UI default (Improved). This preserves backwards compatibility
+    // while making subsequent saves reproducible.
+    const char *algorithm = _root->Attribute("algorithm");
+    if (algorithm != nullptr) {
+        const std::string selectedAlgorithm(algorithm);
+        if (selectedAlgorithm == "current" || selectedAlgorithm == "improved") {
+            const bool useCurrent = selectedAlgorithm == "current";
+            _controls.oldMethodRadioButton->setChecked(useCurrent);
+            _controls.newMethodRadioButton->setChecked(!useCurrent);
+        }
     }
 }

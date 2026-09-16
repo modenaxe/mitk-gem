@@ -19,12 +19,14 @@ See LICENSE.txt or http://www.mitk.org for details.
 
 #include <QtPlugin>
 
+#include "FemExportView.h"
 #include "MaterialMappingView.h"
 
 namespace mitk {
 
     void ch_zhaw_materialmapping_Activator::start(ctkPluginContext *context) {
         BERRY_REGISTER_EXTENSION_CLASS(MaterialMappingView, context)
+        BERRY_REGISTER_EXTENSION_CLASS(FemExportView, context)
     }
 
     void ch_zhaw_materialmapping_Activator::stop(ctkPluginContext *context) {
