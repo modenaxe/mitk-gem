@@ -25,6 +25,7 @@ See LICENSE.txt or http://www.mitk.org for details.
 #include "ui_QmitkUGVisualizationViewControls.h"
 
 class QWidgetAction;
+class vtkDataArray;
 
 class QmitkBoolPropertyWidget;
 
@@ -62,9 +63,14 @@ private:
     void ResetGUI();
     void EnsureRenderingProperties(mitk::DataNode::Pointer node);
     void SelectUG(mitk::UnstructuredGrid::Pointer, mitk::DataNode::Pointer);
-    void SetFieldDataComboBoxEntries(vtkFieldData *);
+    void SetFieldDataComboBoxEntries(vtkFieldData *, const QString &preferredArrayName = QString());
     void UpdateFieldDataComboBoxes(mitk::UnstructuredGrid::Pointer);
     void ActivateFieldData(mitk::DataNode::Pointer, QString);
+    void UpdateTransferFunctionWidget(mitk::DataNode::Pointer,
+                                      vtkDataArray *,
+                                      const QString &,
+                                      bool pointData);
+    void SetSectionOverlayLayer(mitk::DataNode::Pointer, bool enabled);
     bool IsRenderable(mitk::DataNode::Pointer);
 
     Ui::QmitkUGVisualizationViewControls m_Controls;

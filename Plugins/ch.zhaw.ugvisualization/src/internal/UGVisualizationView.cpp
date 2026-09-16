@@ -23,6 +23,9 @@ See LICENSE.txt or http://www.mitk.org for details.
 
 #include <mitkGridRepresentationProperty.h>
 #include <mitkGridVolumeMapperProperty.h>
+#include <mitkBaseRenderer.h>
+#include <mitkProperties.h>
+#include <mitkPropertyList.h>
 #include <mitkVtkScalarModeProperty.h>
 #include <mitkPropertyObserver.h>
 #include <mitkUnstructuredGridVtkMapper3D.h>
@@ -31,6 +34,7 @@ See LICENSE.txt or http://www.mitk.org for details.
 
 #include <QmitkUGCombinedRepresentationPropertyWidget.h>
 #include <QmitkBoolPropertyWidget.h>
+#include <ctkDoubleRangeSlider.h>
 #include <QMessageBox>
 #include <QSignalBlocker>
 #include <QWidgetAction>
@@ -44,6 +48,27 @@ See LICENSE.txt or http://www.mitk.org for details.
 #include <vtkUnstructuredGrid.h>
 
 #include <cmath>
+
+namespace
+{
+constexpr int SECTION_OVERLAY_LAYER = 900;
+constexpr const char *SECTION_OVERLAY_MANAGED_PROPERTY = "gem.ugvisualization.section-overlay-managed";
+constexpr const char *SECTION_OVERLAY_HAD_LOCAL_LAYER_PROPERTY =
+  "gem.ugvisualization.section-overlay-had-local-layer";
+constexpr const char *SECTION_OVERLAY_PREVIOUS_LAYER_PROPERTY =
+  "gem.ugvisualization.section-overlay-previous-layer";
+
+bool UsesPointScalars(int scalarMode)
+{
+  return scalarMode == VTK_SCALAR_MODE_USE_POINT_DATA ||
+         scalarMode == VTK_SCALAR_MODE_USE_POINT_FIELD_DATA;
+}
+
+bool HasDataArrays(vtkDataSetAttributes *fieldData)
+{
+  return fieldData != nullptr && fieldData->GetNumberOfArrays() > 0;
+}
+}
 
 class UGVisVolumeObserver : public mitk::PropertyView {
 public:
@@ -99,6 +124,10 @@ void UGVisualizationView::CreateQtPartControl(QWidget *parent) {
 }
 
 void UGVisualizationView::SetFocus() {
+    // Material Mapping can change the active VTK array while this view is not
+    // focused. Refreshing here keeps the selector and scalar legend aligned
+    // with the map that is actually rendered.
+    UpdateGUI();
 }
 
 void UGVisualizationView::CreateConnections() {
@@ -176,14 +205,41 @@ void UGVisualizationView::SelectUG(mitk::UnstructuredGrid::Pointer _ugrid, mitk:
     m_Controls.sectionsCheckbox->setChecked(has2DMapper);
     m_Controls.m_ContainerWidget->setEnabled(has3DMapper);
 
-    // Material mapping stores its values as cell data. Preserve that intent
-    // when opening this view instead of presenting an empty point-data list.
+    vtkDataSetAttributes *selectedFieldData = nullptr;
+    bool usePointData = false;
+
+    // Material mapping stores its values as cell data. More generally, honour
+    // the node's current scalar association so that the array listed here is
+    // the array rendered by the 3D mapper, rather than simply the first array
+    // encountered in VTK's field-data collection.
     {
         QSignalBlocker blockSignals(m_Controls.scalarModeComboBox);
         auto* grid = _ugrid->GetVtkUnstructuredGrid();
-        const bool hasActiveCellScalars = grid != nullptr && grid->GetCellData() != nullptr
-          && grid->GetCellData()->GetScalars() != nullptr;
-        m_Controls.scalarModeComboBox->setCurrentIndex(hasActiveCellScalars ? 1 : 0);
+        if(grid != nullptr){
+            auto *pointData = grid->GetPointData();
+            auto *cellData = grid->GetCellData();
+
+            mitk::VtkScalarModeProperty *scalarModeProperty = nullptr;
+            _node->GetProperty(scalarModeProperty, "scalar mode");
+            usePointData = scalarModeProperty != nullptr &&
+                           UsesPointScalars(scalarModeProperty->GetVtkScalarMode());
+
+            // Retain a usable association for meshes imported without a
+            // scalar-mode property, or for data where the saved association
+            // no longer contains arrays.
+            if(usePointData && !HasDataArrays(pointData) && HasDataArrays(cellData)){
+                usePointData = false;
+            } else if(!usePointData && !HasDataArrays(cellData) && HasDataArrays(pointData)){
+                usePointData = true;
+            }
+
+            if(usePointData){
+                selectedFieldData = pointData;
+            } else {
+                selectedFieldData = cellData;
+            }
+        }
+        m_Controls.scalarModeComboBox->setCurrentIndex(usePointData ? 0 : 1);
     }
     UpdateFieldDataComboBoxes(_ugrid);
 
@@ -192,12 +248,16 @@ void UGVisualizationView::SelectUG(mitk::UnstructuredGrid::Pointer _ugrid, mitk:
             m_Controls.warningLabel->setVisible(true);
         } else {
             m_Controls.m_TransferFunctionWidget->setVisible(true);
+
+            const auto selectedArrayName = m_Controls.fieldDataComboBox->currentText();
+            auto *selectedArray = selectedFieldData == nullptr
+              ? nullptr
+              : selectedFieldData->GetArray(selectedArrayName.toStdString().c_str());
+            UpdateTransferFunctionWidget(_node, selectedArray, selectedArrayName, usePointData);
         }
 
         m_VolumeMode = false;
         _node->GetBoolProperty("volumerendering", m_VolumeMode);
-
-        m_Controls.m_TransferFunctionWidget->SetDataNode(_node);
 
         mitk::GridRepresentationProperty *gridRepProp = 0;
         mitk::GridVolumeMapperProperty *gridVolumeProp = 0;
@@ -241,6 +301,7 @@ void UGVisualizationView::RenderingCheckboxClicked(bool) {
         m_SelectedNode->SetProperty("outline polygons", mitk::BoolProperty::New(false));
         m_SelectedNode->AddProperty("material.specularCoefficient", mitk::FloatProperty::New(0.0), renderer, true);
     } else if(!isChecked && hasMapper){
+        SetSectionOverlayLayer(m_SelectedNode, false);
         m_SelectedNode->SetMapper(mitk::BaseRenderer::Standard2D, nullptr);
         m_SelectedNode->SetMapper(mitk::BaseRenderer::Standard3D, nullptr);
     }
@@ -271,6 +332,17 @@ void UGVisualizationView::SectionsCheckboxClicked(bool checked) {
         m_SelectedNode->SetProperty("outline polygons", mitk::BoolProperty::New(false));
     }
 
+    // The legacy section mapper paints in the opaque rendering pass. Give it
+    // a renderer-local layer above image slices only while sections are
+    // explicitly requested; this avoids hiding medical images and restores
+    // the previous layer exactly when the option is switched off.
+    SetSectionOverlayLayer(m_SelectedNode, checked);
+
+    if(checked && IsRenderable(m_SelectedNode) && m_Controls.fieldDataComboBox->count() > 0){
+        FieldDataSelectionChanged(m_Controls.fieldDataComboBox->currentIndex());
+    }
+
+    m_SelectedNode->Modified();
     UpdateRenderWindow();
 }
 
@@ -289,17 +361,39 @@ void UGVisualizationView::ScalarModeSelectionChanged(int) {
 }
 
 void UGVisualizationView::UpdateFieldDataComboBoxes(mitk::UnstructuredGrid::Pointer _ugrid) {
+    if(_ugrid.IsNull() || _ugrid->GetVtkUnstructuredGrid() == nullptr){
+        SetFieldDataComboBoxEntries(nullptr);
+        return;
+    }
+
+    auto *grid = _ugrid->GetVtkUnstructuredGrid();
     switch (m_Controls.scalarModeComboBox->currentIndex()){
-        case 0:
-            SetFieldDataComboBoxEntries(_ugrid->GetVtkUnstructuredGrid()->GetPointData());
+        case 0: {
+            auto *pointData = grid->GetPointData();
+            auto *activeScalars = pointData == nullptr ? nullptr : pointData->GetScalars();
+            SetFieldDataComboBoxEntries(
+              pointData, activeScalars != nullptr && activeScalars->GetName() != nullptr
+                ? QString::fromUtf8(activeScalars->GetName())
+                : QString());
             break;
-        case 1:
-            SetFieldDataComboBoxEntries(_ugrid->GetVtkUnstructuredGrid()->GetCellData());
+        }
+        case 1: {
+            auto *cellData = grid->GetCellData();
+            auto *activeScalars = cellData == nullptr ? nullptr : cellData->GetScalars();
+            SetFieldDataComboBoxEntries(
+              cellData, activeScalars != nullptr && activeScalars->GetName() != nullptr
+                ? QString::fromUtf8(activeScalars->GetName())
+                : QString());
+            break;
+        }
+        default:
+            SetFieldDataComboBoxEntries(nullptr);
             break;
     }
 }
 
-void UGVisualizationView::SetFieldDataComboBoxEntries(vtkFieldData *_data) {
+void UGVisualizationView::SetFieldDataComboBoxEntries(vtkFieldData *_data,
+                                                       const QString &preferredArrayName) {
     QSignalBlocker blockSignals(m_Controls.fieldDataComboBox);
     const auto previouslySelectedName = m_Controls.fieldDataComboBox->currentText();
     m_Controls.fieldDataComboBox->clear();
@@ -317,8 +411,14 @@ void UGVisualizationView::SetFieldDataComboBoxEntries(vtkFieldData *_data) {
         }
     }
 
-    const auto previousIndex = m_Controls.fieldDataComboBox->findText(previouslySelectedName);
-    m_Controls.fieldDataComboBox->setCurrentIndex(previousIndex >= 0 ? previousIndex : 0);
+    int selectedIndex = m_Controls.fieldDataComboBox->findText(preferredArrayName);
+    if(selectedIndex < 0){
+        selectedIndex = m_Controls.fieldDataComboBox->findText(previouslySelectedName);
+    }
+    if(selectedIndex < 0 && m_Controls.fieldDataComboBox->count() > 0){
+        selectedIndex = 0;
+    }
+    m_Controls.fieldDataComboBox->setCurrentIndex(selectedIndex);
 }
 
 void UGVisualizationView::FieldDataSelectionChanged(int) {
@@ -397,6 +497,8 @@ void UGVisualizationView::ActivateFieldData(mitk::DataNode::Pointer _node, QStri
     ugrid->GetVtkUnstructuredGrid()->Modified();
     ugrid->Modified();
 
+    UpdateTransferFunctionWidget(_node, data, _name, usePointData);
+
     // Apply the same association immediately when an actor already exists.
     // The node properties above remain the source of truth for subsequently
     // created 3D actors and all 2D renderers.
@@ -410,5 +512,111 @@ void UGVisualizationView::ActivateFieldData(mitk::DataNode::Pointer _node, QStri
         actor->GetMapper()->SetScalarVisibility(true);
         actor->GetMapper()->SelectColorArray(name.c_str());
         actor->GetMapper()->Modified();
+    }
+}
+
+void UGVisualizationView::UpdateTransferFunctionWidget(mitk::DataNode::Pointer _node,
+                                                        vtkDataArray *_data,
+                                                        const QString &_name,
+                                                        bool pointData) {
+    if(_node.IsNull() || _data == nullptr || _name.isEmpty()){
+        m_Controls.m_TransferFunctionWidget->setVisible(false);
+        return;
+    }
+
+    const auto *rawRange = _data->GetRange();
+    if(rawRange == nullptr || !std::isfinite(rawRange[0]) || !std::isfinite(rawRange[1])){
+        m_Controls.m_TransferFunctionWidget->setVisible(false);
+        return;
+    }
+
+    double lower = rawRange[0];
+    double upper = rawRange[1];
+    if(lower == upper){
+        const double padding = lower == 0.0 ? 1.0 : std::abs(lower) * 0.01;
+        lower -= padding;
+        upper += padding;
+    }
+
+    if(_node->GetProperty("TransferFunction") == nullptr){
+        _node->SetProperty("TransferFunction", WorkbenchUtils::createColorTransferFunction(rawRange[0], rawRange[1]));
+    }
+
+    const auto association = pointData ? tr("point data") : tr("cell data");
+    m_Controls.m_TransferFunctionWidget->SetScalarLabel(
+      QStringLiteral("%1 (%2)").arg(_name).arg(association));
+    m_Controls.m_TransferFunctionWidget->SetDataNode(_node);
+
+    {
+        QSignalBlocker blockSignals(m_Controls.m_TransferFunctionWidget->m_RangeSlider);
+        m_Controls.m_TransferFunctionWidget->m_RangeSlider->setMinimum(lower);
+        m_Controls.m_TransferFunctionWidget->m_RangeSlider->setMaximum(upper);
+        m_Controls.m_TransferFunctionWidget->m_RangeSlider->setMinimumValue(lower);
+        m_Controls.m_TransferFunctionWidget->m_RangeSlider->setMaximumValue(upper);
+    }
+
+    m_Controls.m_TransferFunctionWidget->UpdateStepSize();
+    m_Controls.m_TransferFunctionWidget->UpdateRanges();
+    m_Controls.m_TransferFunctionWidget->OnUpdateCanvas();
+    m_Controls.m_TransferFunctionWidget->setVisible(true);
+}
+
+void UGVisualizationView::SetSectionOverlayLayer(mitk::DataNode::Pointer _node, bool enabled) {
+    if(_node.IsNull()){
+        return;
+    }
+
+    bool changed = false;
+    const auto renderers = mitk::BaseRenderer::GetAll2DRenderWindows();
+    for(const auto &entry : renderers){
+        auto *renderer = entry.second;
+        if(renderer == nullptr){
+            continue;
+        }
+
+        auto *propertyList = _node->GetPropertyList(renderer);
+        if(propertyList == nullptr){
+            continue;
+        }
+
+        bool managed = false;
+        propertyList->GetBoolProperty(SECTION_OVERLAY_MANAGED_PROPERTY, managed);
+
+        if(enabled){
+            if(!managed){
+                int previousLayer = 0;
+                const bool hadLocalLayer = propertyList->GetIntProperty("layer", previousLayer);
+                propertyList->SetBoolProperty(SECTION_OVERLAY_MANAGED_PROPERTY, true);
+                propertyList->SetBoolProperty(SECTION_OVERLAY_HAD_LOCAL_LAYER_PROPERTY, hadLocalLayer);
+                if(hadLocalLayer){
+                    propertyList->SetIntProperty(SECTION_OVERLAY_PREVIOUS_LAYER_PROPERTY, previousLayer);
+                }
+            }
+
+            _node->SetIntProperty("layer", SECTION_OVERLAY_LAYER, renderer);
+            changed = true;
+        } else if(managed){
+            bool hadLocalLayer = false;
+            propertyList->GetBoolProperty(SECTION_OVERLAY_HAD_LOCAL_LAYER_PROPERTY, hadLocalLayer);
+            if(hadLocalLayer){
+                int previousLayer = 0;
+                if(propertyList->GetIntProperty(SECTION_OVERLAY_PREVIOUS_LAYER_PROPERTY, previousLayer)){
+                    _node->SetIntProperty("layer", previousLayer, renderer);
+                } else {
+                    propertyList->DeleteProperty("layer");
+                }
+            } else {
+                propertyList->DeleteProperty("layer");
+            }
+
+            propertyList->DeleteProperty(SECTION_OVERLAY_MANAGED_PROPERTY);
+            propertyList->DeleteProperty(SECTION_OVERLAY_HAD_LOCAL_LAYER_PROPERTY);
+            propertyList->DeleteProperty(SECTION_OVERLAY_PREVIOUS_LAYER_PROPERTY);
+            changed = true;
+        }
+    }
+
+    if(changed){
+        _node->Modified();
     }
 }
