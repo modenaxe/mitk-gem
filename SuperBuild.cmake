@@ -185,6 +185,14 @@ if(CGAL_DIR)
   list(APPEND cmake_cache_args "-DCGAL_DIR:PATH=${CGAL_DIR}")
 endif()
 
+# Keep the deployment target consistent in the final MITK-GEM configure as
+# well as the preceding MITK superbuild. This also prevents nested Apple
+# compiler checks from falling back to the runner's host OS version.
+if(APPLE AND CMAKE_OSX_DEPLOYMENT_TARGET)
+  list(APPEND cmake_cache_args
+    "-DCMAKE_OSX_DEPLOYMENT_TARGET:STRING=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+endif()
+
 ExternalProject_Add(${proj}
   DOWNLOAD_COMMAND ""
   CMAKE_GENERATOR ${gen}

@@ -203,6 +203,14 @@ if(NOT MITK_DIR)
       "-DCMAKE_MSVC_RUNTIME_LIBRARY:STRING=${CMAKE_MSVC_RUNTIME_LIBRARY}")
   endif()
 
+  # CppMicroServices embeds resources on macOS with an explicit
+  # -mmacosx-version-min flag. Forward the selected target into MITK's own
+  # superbuild so that flag is never generated with an empty value.
+  if(APPLE AND CMAKE_OSX_DEPLOYMENT_TARGET)
+    list(APPEND additional_mitk_cmakevars
+      "-DCMAKE_OSX_DEPLOYMENT_TARGET:STRING=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+  endif()
+
   if(MITK_USE_Qt6 AND Qt6_DIR)
     list(APPEND additional_mitk_cmakevars "-DQt6_DIR:PATH=${Qt6_DIR}")
   endif()

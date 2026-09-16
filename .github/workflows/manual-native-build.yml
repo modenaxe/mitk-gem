@@ -146,6 +146,10 @@ jobs:
           echo "CGAL_DIR=$(brew --prefix cgal)/lib/cmake/CGAL" >> "$GITHUB_ENV"
           echo "MITK_OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)" >> "$GITHUB_ENV"
           echo "OpenMP_ROOT=$(brew --prefix libomp)" >> "$GITHUB_ENV"
+          # Qt 6.10 supports macOS 13 and newer. MITK's embedded-resource
+          # linker requires this value and otherwise emits
+          # `-mmacosx-version-min=` with no version.
+          echo "MACOSX_DEPLOYMENT_TARGET=13.0" >> "$GITHUB_ENV"
 
       - name: Restore OpenSSL 3.0 installer cache
         if: matrix.id == 'windows'
@@ -295,6 +299,11 @@ jobs:
         if: matrix.id != 'windows'
         shell: bash
         run: |
+          platform_args=()
+          if [[ "${{ matrix.id }}" == "macos" ]]; then
+            platform_args+=("-DCMAKE_OSX_DEPLOYMENT_TARGET:STRING=$MACOSX_DEPLOYMENT_TARGET")
+          fi
+
           cmake -S . -B b -G Ninja \
             -DCMAKE_BUILD_TYPE="${{ env.BUILD_TYPE }}" \
             -DQt6_DIR:PATH="$QT_ROOT_DIR/lib/cmake/Qt6" \
@@ -306,7 +315,19 @@ jobs:
             -DBUILD_TESTING:BOOL=OFF \
             -DMITK_GEM_BUILD_FEM_EXPORT_TESTS:BOOL=ON \
             -DMITK_BUILD_TESTING:BOOL=OFF \
-            -DMITK_USE_Python3:BOOL=OFF
+            -DMITK_USE_Python3:BOOL=OFF \
+            "${platform_args[@]}"
+
+      - name: Verify macOS deployment target propagation
+        if: matrix.id == 'macos'
+        shell: bash
+        run: |
+          expected='CMAKE_OSX_DEPLOYMENT_TARGET:STRING=13.0'
+          grep -Fx "$expected" b/CMakeCache.txt
+          grep -F -- '-DCMAKE_OSX_DEPLOYMENT_TARGET:STRING=13.0' \
+            b/MITK-cmake/tmp/MITK-cfgcmd.txt
+          grep -F -- 'set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING' \
+            b/CMakeExternals/tmp/MITK-GEM-Configure/MITK-GEM-Configure-cache-Release.cmake
 
       - name: Verify Windows superbuild configuration
         if: matrix.id == 'windows'
