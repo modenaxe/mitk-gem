@@ -28,3 +28,12 @@ set(Boost_NO_BOOST_CMAKE ON CACHE BOOL
   "Do not use a system BoostConfig.cmake while configuring MITK." FORCE)
 set(Boost_NO_SYSTEM_PATHS ON CACHE BOOL
   "Restrict MITK Boost discovery to its superbuild prefix." FORCE)
+
+# CMake treats include directories from imported targets as system includes by
+# default. On the Intel macOS runner, Clang searches its implicit
+# /usr/local/include directory before such -isystem paths, so Homebrew's newer
+# Boost headers can shadow the Boost 1.85 headers found by MITK. Keep imported
+# dependency includes at normal -I priority so the selected package is also
+# the package used by the compiler.
+set(CMAKE_NO_SYSTEM_FROM_IMPORTED ON CACHE BOOL
+  "Keep staged MITK dependencies ahead of implicit system include paths." FORCE)

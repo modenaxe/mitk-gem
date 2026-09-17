@@ -339,11 +339,22 @@ jobs:
           $initialCache = Get-Content -LiteralPath 'b/MITK-GEM-MITKInitialCache.cmake' -Raw
           foreach ($entry in @(
             'set(Boost_NO_BOOST_CMAKE ON CACHE BOOL',
-            'set(Boost_NO_SYSTEM_PATHS ON CACHE BOOL'
+            'set(Boost_NO_SYSTEM_PATHS ON CACHE BOOL',
+            'set(CMAKE_NO_SYSTEM_FROM_IMPORTED ON CACHE BOOL'
           )) {
             if (-not $initialCache.Contains($entry)) {
               throw "MITK initial cache does not contain '$entry'."
             }
+          }
+
+          $gemInitialCachePath = "b/CMakeExternals/tmp/MITK-GEM-Configure/MITK-GEM-Configure-cache-$env:BUILD_TYPE.cmake"
+          if (-not (Test-Path -LiteralPath $gemInitialCachePath)) {
+            throw "Expected generated nested-project initial cache at '$gemInitialCachePath'."
+          }
+          $gemInitialCache = Get-Content -LiteralPath $gemInitialCachePath -Raw
+          $expectedImportPriority = 'set(CMAKE_NO_SYSTEM_FROM_IMPORTED "ON" CACHE BOOL "Initial cache" FORCE)'
+          if (-not $gemInitialCache.Contains($expectedImportPriority)) {
+            throw 'The nested MITK-GEM configure does not preserve imported dependency include priority.'
           }
 
       - name: Prepare retry-safe MITK Boost archive
@@ -395,6 +406,21 @@ jobs:
             -Destination (Join-Path $mitkDownloadDirectory $env:MITK_BOOST_ARCHIVE) -Force
           Write-Host 'Prepared checksum-verified MITK Boost archive.'
 
+      - name: Apply and verify MITK compatibility patches
+        shell: pwsh
+        run: |
+          cmake "-DMITK_SOURCE_DIR:PATH=$env:MITK_SOURCE_DIR" `
+            -P 'CMake/ApplyMITK2025CMake4Compat.cmake'
+          if ($LASTEXITCODE -ne 0) {
+            throw "The MITK compatibility patch failed with exit code $LASTEXITCODE."
+          }
+
+          $mitkLexicalCastPath = Join-Path $env:MITK_SOURCE_DIR 'Modules/Core/include/mitkLexicalCast.h'
+          $mitkLexicalCast = Get-Content -LiteralPath $mitkLexicalCastPath -Raw
+          if (-not $mitkLexicalCast.Contains('std::numeric_limits<Target>::max_digits10')) {
+            throw 'MITK still depends on Boost private lexical-cast precision internals.'
+          }
+
       - name: Verify Windows superbuild configuration
         if: matrix.id == 'windows'
         shell: pwsh
@@ -434,12 +460,6 @@ jobs:
           $boostRootEntry = "set(Boost_ROOT `"$boostRoot`" CACHE PATH `"Initial cache`" FORCE)"
           if (-not $gemInitialCache.Contains($boostRootEntry)) {
             throw "The generated MITK-GEM initial cache does not forward Boost_ROOT '$boostRoot'."
-          }
-
-          cmake "-DMITK_SOURCE_DIR:PATH=$env:MITK_SOURCE_DIR" `
-            -P 'CMake\ApplyMITK2025CMake4Compat.cmake'
-          if ($LASTEXITCODE -ne 0) {
-            throw "The MITK compatibility patch failed with exit code $LASTEXITCODE."
           }
 
           $mitkCMakeLists = Get-Content -LiteralPath "$env:MITK_SOURCE_DIR\CMakeLists.txt" -Raw

@@ -53,6 +53,13 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Imported dependency targets normally contribute -isystem include paths.
+# Apple Clang can search its implicit /usr/local/include path before those,
+# allowing Homebrew headers to shadow the package selected by CMake. Preserve
+# the selected dependency order for MITK-GEM and its nested configure.
+set(CMAKE_NO_SYSTEM_FROM_IMPORTED ON CACHE BOOL
+  "Keep imported dependency headers ahead of implicit system include paths." FORCE)
+
 # MSVC otherwise reports the obsolete 199711L value for __cplusplus.  ITK uses
 # this macro to validate ABI-compatible C++ language standards in consumers.
 if(MSVC)

@@ -916,3 +916,64 @@ if(mitk_startup_dialog_already_patched EQUAL -1)
 else()
   message(STATUS "MITK v2025.12.2 direct-startup and all-plugins-default patch is already applied")
 endif()
+
+# MITK's Apple-specific lexical_cast fallback uses a private Boost helper that
+# was removed after Boost 1.85. Homebrew's headers can be visible on macOS even
+# when CMake correctly discovers MITK's staged Boost. Use the equivalent
+# standard floating-point round-trip precision so this code remains compatible
+# with both the pinned and newer Boost layouts.
+set(mitk_lexical_cast_file
+  "${MITK_SOURCE_DIR}/Modules/Core/include/mitkLexicalCast.h")
+if(NOT EXISTS "${mitk_lexical_cast_file}")
+  message(FATAL_ERROR "MITK lexical-cast header was not found: ${mitk_lexical_cast_file}")
+endif()
+
+file(READ "${mitk_lexical_cast_file}" mitk_lexical_cast_contents)
+string(FIND "${mitk_lexical_cast_contents}" "\r\n" mitk_lexical_cast_uses_crlf)
+string(REPLACE "\r\n" "\n" mitk_lexical_cast_normalized_contents
+  "${mitk_lexical_cast_contents}")
+
+set(mitk_lexical_cast_patch_marker
+  "// MITK-GEM patch: use standard round-trip precision instead of Boost private internals.")
+string(FIND "${mitk_lexical_cast_normalized_contents}"
+  "${mitk_lexical_cast_patch_marker}" mitk_lexical_cast_already_patched)
+
+if(mitk_lexical_cast_already_patched EQUAL -1)
+  set(mitk_lexical_cast_include_original "#include <boost/lexical_cast.hpp>")
+  string(CONCAT mitk_lexical_cast_include_patched
+    "#include <limits>\n\n"
+    "#include <boost/lexical_cast.hpp>")
+  set(mitk_lexical_cast_precision_original
+    "        stream.precision(boost::detail::lcast_get_precision<Target>());")
+  string(CONCAT mitk_lexical_cast_precision_patched
+    "        ${mitk_lexical_cast_patch_marker}\n"
+    "        stream.precision(std::numeric_limits<Target>::max_digits10);")
+
+  string(FIND "${mitk_lexical_cast_normalized_contents}"
+    "${mitk_lexical_cast_include_original}" mitk_lexical_cast_include_location)
+  string(FIND "${mitk_lexical_cast_normalized_contents}"
+    "${mitk_lexical_cast_precision_original}" mitk_lexical_cast_precision_location)
+  if(mitk_lexical_cast_include_location EQUAL -1 OR
+     mitk_lexical_cast_precision_location EQUAL -1)
+    message(FATAL_ERROR
+      "The expected MITK v2025.12.2 lexical-cast context was not found; refusing to patch an unknown source revision")
+  endif()
+
+  string(REPLACE "${mitk_lexical_cast_include_original}"
+    "${mitk_lexical_cast_include_patched}"
+    mitk_lexical_cast_normalized_contents "${mitk_lexical_cast_normalized_contents}")
+  string(REPLACE "${mitk_lexical_cast_precision_original}"
+    "${mitk_lexical_cast_precision_patched}"
+    mitk_lexical_cast_normalized_contents "${mitk_lexical_cast_normalized_contents}")
+
+  if(NOT mitk_lexical_cast_uses_crlf EQUAL -1)
+    string(REPLACE "\n" "\r\n" mitk_lexical_cast_contents
+      "${mitk_lexical_cast_normalized_contents}")
+  else()
+    set(mitk_lexical_cast_contents "${mitk_lexical_cast_normalized_contents}")
+  endif()
+  file(WRITE "${mitk_lexical_cast_file}" "${mitk_lexical_cast_contents}")
+  message(STATUS "Applied MITK v2025.12.2 Boost lexical-cast compatibility patch")
+else()
+  message(STATUS "MITK v2025.12.2 Boost lexical-cast compatibility patch is already applied")
+endif()
