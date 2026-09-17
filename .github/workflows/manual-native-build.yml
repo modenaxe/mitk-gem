@@ -43,6 +43,9 @@ env:
   # Pin the upstream commit that replaces the retired autoconf 2.71-3 MSYS2
   # archive used by GMP with the live 2.71-4 archive.
   VCPKG_COMMIT: 37bb045f3c7a747d3e5d1c13b6fe6a0aec4b5d00
+  MITK_BOOST_ARCHIVE: boost_1_85_0_patched.tar.gz
+  MITK_BOOST_ARCHIVE_URL: https://www.mitk.org/download/thirdparty/boost_1_85_0_patched.tar.gz
+  MITK_BOOST_ARCHIVE_MD5: 8f7c3012a5b64d9b0b07b20cde12d989
   CMAKE_BUILD_PARALLEL_LEVEL: 2
 
 jobs:
@@ -133,7 +136,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends \
             build-essential ninja-build libcgal-dev libgmp-dev libmpfr-dev \
-            libgl1-mesa-dev libglu1-mesa-dev libssl-dev
+            libgl1-mesa-dev libglu1-mesa-dev libssl-dev libtiff-dev libxt-dev
           cgal_config="$(dpkg -L libcgal-dev | grep '/CGALConfig.cmake$' | head -n 1)"
           echo "CGAL_DIR=$(dirname "$cgal_config")" >> "$GITHUB_ENV"
           echo "MITK_OPENSSL_ROOT_DIR=/usr" >> "$GITHUB_ENV"
@@ -256,13 +259,14 @@ jobs:
           path: ${{ runner.temp }}/mitk-source
           key: ${{ runner.os }}-mitk-source-${{ env.MITK_VERSION }}-${{ hashFiles('CMakeExternals/MITK.cmake', 'CMake/ApplyMITK2025CMake4Compat.cmake', 'CMake/MITK-GEM-MITKInitialCache.cmake.in', 'CMake/Whitelists/VCLab.cmake') }}
 
-      - name: Restore MITK external source cache
+      # Cache only the immutable archive. Caching ep/src also captures
+      # extracted sources and build trees without their ExternalProject stamp
+      # files, costs roughly 3 GB per platform, and is unsafe to restore.
+      - name: Restore MITK Boost archive cache
         uses: actions/cache@v6
         with:
-          # MITK v2025.12.2 warns when its nested build directory exceeds 40
-          # characters. `b` keeps the Windows GitHub workspace at that limit.
-          path: b/MITK-superbuild/ep/src
-          key: ${{ runner.os }}-mitk-external-sources-${{ env.MITK_VERSION }}-${{ hashFiles('CMakeExternals/MITK.cmake', 'CMake/ApplyMITK2025CMake4Compat.cmake', 'CMake/MITK-GEM-MITKInitialCache.cmake.in', 'CMake/Whitelists/VCLab.cmake') }}
+          path: ${{ runner.temp }}/mitk-downloads/${{ env.MITK_BOOST_ARCHIVE }}
+          key: ${{ runner.os }}-mitk-boost-${{ env.MITK_BOOST_ARCHIVE_MD5 }}
 
       - name: Prepare MITK source
         shell: pwsh
@@ -328,6 +332,68 @@ jobs:
             b/MITK-cmake/tmp/MITK-cfgcmd.txt
           grep -F -- 'set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING' \
             b/CMakeExternals/tmp/MITK-GEM-Configure/MITK-GEM-Configure-cache-Release.cmake
+
+      - name: Verify bundled Boost selection
+        shell: pwsh
+        run: |
+          $initialCache = Get-Content -LiteralPath 'b/MITK-GEM-MITKInitialCache.cmake' -Raw
+          foreach ($entry in @(
+            'set(Boost_NO_BOOST_CMAKE ON CACHE BOOL',
+            'set(Boost_NO_SYSTEM_PATHS ON CACHE BOOL'
+          )) {
+            if (-not $initialCache.Contains($entry)) {
+              throw "MITK initial cache does not contain '$entry'."
+            }
+          }
+
+      - name: Prepare retry-safe MITK Boost archive
+        shell: pwsh
+        run: |
+          $downloadDirectory = Join-Path $env:RUNNER_TEMP 'mitk-downloads'
+          $cachedArchive = Join-Path $downloadDirectory $env:MITK_BOOST_ARCHIVE
+          $partialArchive = "$cachedArchive.partial"
+          New-Item -ItemType Directory -Path $downloadDirectory -Force | Out-Null
+
+          function Test-BoostArchive([string] $Path) {
+            if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+              return $false
+            }
+            $actualMd5 = (Get-FileHash -LiteralPath $Path -Algorithm MD5).Hash.ToLowerInvariant()
+            return $actualMd5 -eq $env:MITK_BOOST_ARCHIVE_MD5
+          }
+
+          if (-not (Test-BoostArchive $cachedArchive)) {
+            Remove-Item -LiteralPath $cachedArchive -Force -ErrorAction SilentlyContinue
+            $downloaded = $false
+            foreach ($attempt in 1..5) {
+              Remove-Item -LiteralPath $partialArchive -Force -ErrorAction SilentlyContinue
+              try {
+                Write-Host "Downloading MITK Boost archive (attempt $attempt of 5)..."
+                Invoke-WebRequest -UseBasicParsing -Uri $env:MITK_BOOST_ARCHIVE_URL `
+                  -OutFile $partialArchive -ErrorAction Stop
+                if (-not (Test-BoostArchive $partialArchive)) {
+                  throw 'Downloaded Boost archive failed its MD5 verification.'
+                }
+                Move-Item -LiteralPath $partialArchive -Destination $cachedArchive -Force
+                $downloaded = $true
+                break
+              } catch {
+                Write-Warning "Boost download attempt $attempt failed: $($_.Exception.Message)"
+                if ($attempt -lt 5) {
+                  Start-Sleep -Seconds (10 * $attempt)
+                }
+              }
+            }
+            if (-not $downloaded) {
+              throw 'Could not download a valid MITK Boost archive after 5 attempts.'
+            }
+          }
+
+          $mitkDownloadDirectory = Join-Path $PWD 'b/MITK-superbuild/ep/src'
+          New-Item -ItemType Directory -Path $mitkDownloadDirectory -Force | Out-Null
+          Copy-Item -LiteralPath $cachedArchive `
+            -Destination (Join-Path $mitkDownloadDirectory $env:MITK_BOOST_ARCHIVE) -Force
+          Write-Host 'Prepared checksum-verified MITK Boost archive.'
 
       - name: Verify Windows superbuild configuration
         if: matrix.id == 'windows'

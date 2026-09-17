@@ -18,3 +18,13 @@ set(MITK_BUILD_org.mitk.gui.qt.dicombrowser ON CACHE BOOL
   "Build the org.mitk.gui.qt.dicombrowser plug-in." FORCE)
 set(MITK_BUILD_org.mitk.gui.qt.dicominspector ON CACHE BOOL
   "Build the org.mitk.gui.qt.dicominspector plug-in." FORCE)
+
+# MITK builds and stages its patched Boost 1.85 headers in the superbuild
+# prefix. Homebrew CGAL also installs a newer system Boost whose CMake package
+# can otherwise take precedence on macOS. MITK 2025.12.2 still uses a Boost
+# 1.85 lexical_cast detail API, so force FindBoost's module search to honour
+# the staged Boost_ROOT instead of selecting a system BoostConfig.cmake.
+set(Boost_NO_BOOST_CMAKE ON CACHE BOOL
+  "Do not use a system BoostConfig.cmake while configuring MITK." FORCE)
+set(Boost_NO_SYSTEM_PATHS ON CACHE BOOL
+  "Restrict MITK Boost discovery to its superbuild prefix." FORCE)
