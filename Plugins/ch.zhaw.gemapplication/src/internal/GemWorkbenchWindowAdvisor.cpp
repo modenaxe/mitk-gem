@@ -18,16 +18,67 @@ See LICENSE.txt or http://www.mitk.org for details.
 #include "QmitkExtApplicationPlugin.h"
 
 #include <ctkPluginContext.h>
+#include <berryIPerspectiveDescriptor.h>
+#include <berryIWorkbenchPage.h>
+#include <berryIWorkbenchWindow.h>
+#include <berryIWorkbenchWindowConfigurer.h>
+#include <mitkCoreServices.h>
 #include <mitkDataNode.h>
 #include <mitkDataStorage.h>
 #include <mitkIDataStorageReference.h>
 #include <mitkIDataStorageService.h>
+#include <mitkIPreferences.h>
+#include <mitkIPreferencesService.h>
 #include <mitkRenderingManager.h>
 
 #include <QTimer>
 
 namespace
 {
+  constexpr auto GemPerspectiveId = "org.mitk.perspectives.gem";
+  constexpr auto FemExportViewId = "org.mitk.views.femexport";
+  constexpr auto LayoutPreferencesNode = "ch.zhaw.gemapplication/layout";
+  constexpr auto FemExportLayoutMigrationKey = "fem export tab v1";
+
+  void EnsureFemExportViewIsInDefaultLayout(const berry::IWorkbenchWindow::Pointer& window)
+  {
+    if (window.IsNull())
+      return;
+
+    const auto page = window->GetActivePage();
+    if (page.IsNull())
+      return;
+
+    const auto perspective = page->GetPerspective();
+    if (perspective.IsNull() || perspective->GetId() != GemPerspectiveId)
+      return;
+
+    auto* preferencesService = mitk::CoreServices::GetPreferencesService();
+    if (preferencesService == nullptr)
+      return;
+
+    auto* preferences =
+      preferencesService->GetSystemPreferences()->Node(LayoutPreferencesNode);
+    if (preferences->GetBool(FemExportLayoutMigrationKey, false))
+      return;
+
+    // BlueBerry restores the user's saved perspective instead of invoking
+    // GemPerspective::CreateInitialLayout. Profiles created before FEM Export
+    // was added therefore never receive its tab. Reset only those old layouts;
+    // the current factory places FEM Export immediately after Material Mapping.
+    if (page->FindViewReference(FemExportViewId).IsNull())
+      page->ResetPerspective();
+
+    // Persist the migration only after the requested view is present. This
+    // keeps the operation one-shot while still allowing users to customize or
+    // close the tab later without having their layout reset on every launch.
+    if (page->FindViewReference(FemExportViewId).IsNotNull())
+    {
+      preferences->PutBool(FemExportLayoutMigrationKey, true);
+      preferences->Flush();
+    }
+  }
+
   bool IsDisplayableDataNode(const mitk::DataNode* node)
   {
     if (node == nullptr || node->GetData() == nullptr)
@@ -141,6 +192,8 @@ GemWorkbenchWindowAdvisor::~GemWorkbenchWindowAdvisor()
 void GemWorkbenchWindowAdvisor::PostWindowOpen()
 {
   QmitkExtWorkbenchWindowAdvisor::PostWindowOpen();
+
+  EnsureFemExportViewIsInDefaultLayout(GetWindowConfigurer()->GetWindow());
 
   // File loading happens after the multi-widget is created. MITK's usual
   // startup reinit therefore sees only helper geometry and leaves the first
